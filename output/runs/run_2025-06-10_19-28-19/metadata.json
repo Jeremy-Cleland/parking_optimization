@@ -8,7 +8,14 @@
     "duration": 1.0,
     "output": "output/results.json"
   },
-  "duration_seconds": 0.0,
-  "status": "running",
-  "artifacts": []
+  "duration_seconds": 21.089709997177124,
+  "status": "completed",
+  "artifacts": [
+    "visualizations/summary_dashboard.png",
+    "visualizations/dark_theme_test.png",
+    "visualizations/occupancy_heatmap.png",
+    "visualizations/search_time_distribution.png",
+    "visualizations/revenue_analysis.png",
+    "visualizations/performance_metrics.png"
+  ]
 }
