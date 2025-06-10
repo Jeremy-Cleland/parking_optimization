@@ -1,0 +1,21 @@
+{
+  "run_id": "run_2025-06-10_19-26-45",
+  "timestamp": "2025-06-10T19:26:45.142241",
+  "mode": "demo",
+  "parameters": {
+    "zones": 20,
+    "drivers": 500,
+    "duration": 8.0,
+    "output": "output/results.json"
+  },
+  "duration_seconds": 82.41328310966492,
+  "status": "completed",
+  "artifacts": [
+    "visualizations/summary_dashboard.png",
+    "visualizations/dark_theme_test.png",
+    "visualizations/occupancy_heatmap.png",
+    "visualizations/search_time_distribution.png",
+    "visualizations/revenue_analysis.png",
+    "visualizations/performance_metrics.png"
+  ]
+}

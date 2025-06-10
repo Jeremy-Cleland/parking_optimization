@@ -531,10 +531,10 @@ class CitySimulator:
             if self.map_loader.road_network is None:
                 return
 
-            # Sample a few edges for traffic updates (to avoid API limits)
+            # Sample fewer edges for traffic updates (to avoid API limits)
             sample_edges = random.sample(
                 list(self.map_loader.road_network.edges(data=True)),
-                min(10, len(self.map_loader.road_network.edges())),
+                min(3, len(self.map_loader.road_network.edges())),
             )
 
             for u, v, edge_data in sample_edges:
