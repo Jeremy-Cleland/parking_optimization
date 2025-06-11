@@ -36,12 +36,8 @@ run: ## Complete end-to-end simulation with analysis and reports
 	@echo "$(GREEN)Running complete parking optimization simulation...$(NC)"
 	@echo "$(BLUE)Step 1: Ensuring map data is available...$(NC)"
 	@$(MAKE) ensure-data
-	@echo "$(BLUE)Step 2: Running full simulation...$(NC)"
+	@echo "$(BLUE)Step 2: Running comprehensive simulation with analysis and visualization...$(NC)"
 	python main.py --mode simulate --zones 20 --drivers 500
-	@echo "$(BLUE)Step 3: Generating analysis reports...$(NC)"
-	python main.py --mode analyze
-	@echo "$(BLUE)Step 4: Creating visualizations...$(NC)"
-	python main.py --mode visualize
 	@echo "$(GREEN)✅ Complete run finished! Check output/latest/ for results$(NC)"
 
 simulate: ## Run city simulation
@@ -68,6 +64,32 @@ fetch-data: ## Download Grand Rapids map data (force refresh)
 	@echo "$(GREEN)Downloading fresh Grand Rapids map data...$(NC)"
 	python scripts/fetch_grand_rapids_data.py
 	@echo "$(GREEN)✅ Map data download complete!$(NC)"
+
+showcase: ## Prepare showcase directory with latest run for sharing/upload
+	@echo "$(GREEN)Creating showcase directory with latest run...$(NC)"
+	@mkdir -p showcase/latest_run/selected_visuals
+	@mkdir -p showcase/sample_outputs
+	@mkdir -p showcase/presentation
+	@if [ -L "output/latest" ] && [ -d "output/latest" ]; then \
+		echo "$(BLUE)Copying latest run data...$(NC)"; \
+		cp output/latest/metadata.json showcase/latest_run/ 2>/dev/null || true; \
+		cp output/latest/simulation_results.json showcase/latest_run/ 2>/dev/null || true; \
+		echo "$(BLUE)Selecting key visualizations...$(NC)"; \
+		cp output/latest/visualizations/interactive_parking_map.html showcase/latest_run/selected_visuals/ 2>/dev/null || true; \
+		cp output/latest/visualizations/geographic_dashboard.png showcase/latest_run/selected_visuals/ 2>/dev/null || true; \
+		cp output/latest/visualizations/performance_metrics.png showcase/latest_run/selected_visuals/ 2>/dev/null || true; \
+		cp output/latest/visualizations/complexity_analysis.png showcase/latest_run/selected_visuals/ 2>/dev/null || true; \
+		cp output/latest/visualizations/summary_dashboard.png showcase/latest_run/selected_visuals/ 2>/dev/null || true; \
+		cp output/latest/visualizations/network_analysis_map.png showcase/latest_run/selected_visuals/ 2>/dev/null || true; \
+ \
+		cp output/latest/visualizations/revenue_analysis.png showcase/latest_run/selected_visuals/ 2>/dev/null || true; \
+		cp output/latest/analysis/complexity_analysis.png showcase/latest_run/selected_visuals/algorithm_complexity.png 2>/dev/null || true; \
+		echo "$(GREEN)✅ Showcase directory ready at: showcase/$(NC)"; \
+		echo "$(BLUE)📁 Files prepared for upload/sharing:$(NC)"; \
+		find showcase/latest_run -name "*.png" -o -name "*.html" -o -name "*.json" | sort; \
+	else \
+		echo "$(YELLOW)⚠️  No latest run found. Run 'make run' first.$(NC)"; \
+	fi
 
 # =============================================================================
 # 🧪 TESTING & CODE QUALITY

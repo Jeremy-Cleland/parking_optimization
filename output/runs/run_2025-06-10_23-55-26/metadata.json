@@ -1,0 +1,14 @@
+{
+  "run_id": "run_2025-06-10_23-55-26",
+  "timestamp": "2025-06-10T23:55:26.279374",
+  "mode": "simulate",
+  "parameters": {
+    "zones": 20,
+    "drivers": 500,
+    "duration": 4.0,
+    "output": "output/results.json"
+  },
+  "duration_seconds": 94.86813807487488,
+  "status": "completed",
+  "artifacts": []
+}

@@ -102,10 +102,38 @@ make help             # Show all commands
 
 The system demonstrates:
 
-- **85% reduction** in average parking search time
-- **40% increase** in parking revenue through dynamic pricing
+- **Algorithmic optimization** with proven complexity analysis
+- **Dynamic pricing simulation** showing revenue optimization potential
 - **Real-time optimization** with <100ms response times
 - **Scalable architecture** supporting 10,000+ concurrent users
+
+### 📊 Sample Visualizations
+
+#### Executive Dashboard
+
+Complete system overview with performance metrics and key insights:
+
+![Summary Dashboard](showcase/latest_run/selected_visuals/summary_dashboard.png)
+
+#### Real-World Geographic Analysis
+
+Grand Rapids downtown parking analysis with 113 zones and road network:
+
+![Geographic Dashboard](showcase/latest_run/selected_visuals/geographic_dashboard.png)
+
+#### Algorithm Performance Analysis
+
+Complexity analysis and system performance metrics:
+
+![Performance Metrics](showcase/latest_run/selected_visuals/performance_metrics.png)
+
+#### Network Infrastructure
+
+Road network analysis showing 58 intersections and routing optimization:
+
+![Network Analysis](showcase/latest_run/selected_visuals/network_analysis_map.png)
+
+*Interactive map available at: `showcase/latest_run/selected_visuals/interactive_parking_map.html`*
 
 ## API Configuration (Optional)
 

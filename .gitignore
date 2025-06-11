@@ -157,6 +157,12 @@ maps/
 *.svg
 *.html
 
+# Exception: Allow showcase directory for sharing/upload
+!showcase/
+!showcase/**/*.png
+!showcase/**/*.html
+!showcase/**/*.json
+
 # Log files
 *.log
 logs/

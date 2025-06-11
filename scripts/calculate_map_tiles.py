@@ -190,25 +190,6 @@ def main():
                 f"{est['size_mb']:<12,.1f} {size_str:<10}"
             )
 
-    # Recommendations
-    print("\n🎯 Recommendations")
-    print("=" * 70)
-
-    print("For Web Visualization:")
-    print("  • Zoom 10-15: Good for overview and city-level planning")
-    print("  • Zoom 16-18: Ideal for street-level parking analysis")
-    print("  • Zoom 19+: Detailed spot-level visualization (high data cost)")
-
-    print("\nFor Interactive Applications:")
-    print("  • Cache tiles for zoom levels 12-17 for best performance")
-    print("  • Use vector tiles (MVT) for smaller file sizes and styling flexibility")
-    print("  • Consider on-demand loading for zoom levels 18+")
-
-    print("\nFor Real-time Systems:")
-    print("  • Zoom 14-16 provides good balance of detail vs. performance")
-    print("  • Pre-generate tiles for frequently accessed areas")
-    print("  • Use CDN for tile delivery in production")
-
 
 if __name__ == "__main__":
     main()

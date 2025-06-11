@@ -20,10 +20,36 @@ Urban parking is inefficient - drivers spend an average of 17 minutes searching 
 
 ### Key Results
 
-- **85% reduction** in average parking search time
-- **40% increase** in parking revenue through dynamic pricing
-- **Real-time optimization** with <100ms response times
-- **Scalable architecture** supporting city-scale deployment
+- **Demonstrated optimization algorithms** with proven complexity bounds
+- **Real-time routing** with <100ms response times on Grand Rapids data
+- **Multi-algorithm integration** showing practical feasibility
+- **Scalable architecture** designed for city-scale deployment
+
+## 🎯 Visual Results
+
+### System Performance Dashboard
+
+Comprehensive analysis of algorithm performance and system metrics:
+
+![Summary Dashboard](showcase/latest_run/selected_visuals/summary_dashboard.png)
+
+### Real-World Geographic Integration
+
+Downtown Grand Rapids analysis with actual parking zones and road network:
+
+![Geographic Analysis](showcase/latest_run/selected_visuals/geographic_dashboard.png)
+
+### Algorithm Complexity Analysis
+
+Mathematical verification of algorithm performance and complexity bounds:
+
+![Algorithm Complexity](showcase/latest_run/selected_visuals/algorithm_complexity.png)
+
+### Revenue & Utilization Analysis
+
+Dynamic pricing effectiveness and parking utilization patterns:
+
+![Revenue Analysis](showcase/latest_run/selected_visuals/revenue_analysis.png)
 
 ## Technical Implementation
 
