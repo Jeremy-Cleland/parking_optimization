@@ -15,7 +15,6 @@ from core.logger import main_logger, metrics
 from core.run_manager import (
     complete_run,
     get_run_path,
-    save_artifact,
     start_run,
 )
 from simulation.city_simulator import CitySimulator
@@ -106,7 +105,7 @@ def main():
             print(f"⚠️  {warning}")
         print()
 
-        if args.mode == "simulate" or args.mode == "demo":
+        if args.mode == "simulate":
             # Run simulation
             print("Initializing city simulation...")
             sim = CitySimulator(
@@ -136,21 +135,46 @@ def main():
             except Exception as e:
                 print(f"⚠️  Analysis step failed: {e}")
 
-            print("\nGenerating visualizations...")
+            print("\nGenerating comprehensive visualizations...")
             try:
+                # Create visualizations directory in run folder
+                viz_dir = get_run_path() / "visualizations"
+                viz_dir.mkdir(exist_ok=True)
+
+                # 1. Generate standard visualizations
                 visualizer = ParkingVisualizer(str(results_path))
                 visualizer.create_all_visualizations()
 
-                # Save visualization artifacts
-                import glob
+                # 2. Generate comprehensive map visualizations
+                from analysis.map_visualizer import create_all_map_visualizations
 
+                create_all_map_visualizations(str(results_path))
+
+                # 3. Save all visualization artifacts to run directory
+                import glob
+                import shutil
+
+                # Copy standard visualizations
                 for viz_file in glob.glob("visualization_output/*.png"):
                     filename = viz_file.split("/")[-1]
-                    save_artifact(
-                        filename, source_path=viz_file, subdir="visualizations"
-                    )
+                    shutil.copy2(viz_file, viz_dir / filename)
+
+                # Copy interactive map files
+                for viz_file in glob.glob("visualization_output/*.html"):
+                    filename = viz_file.split("/")[-1]
+                    shutil.copy2(viz_file, viz_dir / filename)
+
+                print(f"✅ Visualizations saved to: {viz_dir}")
+                print(
+                    f"📊 Generated {len(list(viz_dir.glob('*.png')))} static visualizations"
+                )
+                print(
+                    f"🗺️ Generated {len(list(viz_dir.glob('*.html')))} interactive maps"
+                )
+
             except Exception as e:
                 print(f"⚠️  Visualization step failed: {e}")
+                main_logger.error(f"Visualization generation failed: {e}")
 
         elif args.mode == "analyze":
             # Run complexity analysis only
@@ -164,17 +188,36 @@ def main():
             analyzer.generate_report()
 
         elif args.mode == "visualize":
-            # Create visualizations from existing results
-            print("Creating visualizations...")
+            # Create comprehensive visualizations from existing results
+            print("Creating comprehensive visualizations...")
+
+            # Create visualizations directory in run folder
+            viz_dir = get_run_path() / "visualizations"
+            viz_dir.mkdir(exist_ok=True)
+
+            # 1. Standard visualizations
             visualizer = ParkingVisualizer(args.output)
             visualizer.create_all_visualizations()
 
-            # Save visualization artifacts
-            import glob
+            # 2. Comprehensive map visualizations
+            from analysis.map_visualizer import create_all_map_visualizations
 
-            for viz_file in glob.glob("visualization_output/*.png"):
+            create_all_map_visualizations(args.output)
+
+            # 3. Save all visualization artifacts to run directory
+            import glob
+            import shutil
+
+            # Copy all generated files
+            for viz_file in glob.glob("visualization_output/*"):
                 filename = viz_file.split("/")[-1]
-                save_artifact(filename, source_path=viz_file, subdir="visualizations")
+                shutil.copy2(viz_file, viz_dir / filename)
+
+            print(f"✅ Visualizations saved to: {viz_dir}")
+            print(
+                f"📊 Generated {len(list(viz_dir.glob('*.png')))} static visualizations"
+            )
+            print(f"🗺️ Generated {len(list(viz_dir.glob('*.html')))} interactive maps")
 
         # Complete the run tracking
         duration = time.time() - start_time

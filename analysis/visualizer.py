@@ -6,7 +6,6 @@ Creates charts and maps to visualize simulation outcomes
 import json
 import os
 
-import folium
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -81,9 +80,6 @@ class ParkingVisualizer:
 
         # 6. Create summary dashboard
         self.create_dashboard()
-
-        # 7. Create dark theme test
-        self.create_dark_theme_test()
 
         print(f"\nVisualizations saved to '{self.output_dir}/' directory")
 
@@ -849,74 +845,6 @@ class ParkingVisualizer:
         save_plot(fig, f"{self.output_dir}/summary_dashboard.png")
 
         print(f"Created summary dashboard: {self.output_dir}/summary_dashboard.png")
-
-    def create_interactive_map(self):
-        """Create an interactive map of parking zones (if location data available)"""
-        # This would create a Folium map in a real implementation
-        # For now, we'll create a placeholder
-
-        m = folium.Map(location=[0, 0], zoom_start=13)
-
-        # Add markers for each zone (using synthetic data)
-        config = self.results.get("simulation_config", {})
-        params = self.results.get("parameters", {})
-        n_zones = config.get("total_zones", params.get("n_zones", 20))
-        city_size = params.get("city_size_km", 5)
-
-        for i in range(n_zones):
-            lat = np.random.uniform(-city_size / 2, city_size / 2) / 111
-            lon = np.random.uniform(-city_size / 2, city_size / 2) / 111
-
-            folium.Marker(
-                [lat, lon], popup=f"Zone {i}", tooltip=f"Parking Zone {i}"
-            ).add_to(m)
-
-        m.save(f"{self.output_dir}/parking_zones_map.html")
-        print(f"Created interactive map: {self.output_dir}/parking_zones_map.html")
-
-    def create_dark_theme_test(self):
-        """Create a test plot to verify dark theme styling"""
-        fig, ax = plt.subplots(figsize=(12, 7))
-
-        # Generate test data
-        x = np.linspace(0, 4 * np.pi, 200)
-        y1 = np.sin(x)
-        y2 = np.cos(x)
-
-        # Create the plot with improved styling
-        ax.plot(
-            x,
-            y1,
-            color=self.theme_colors["main_color"],
-            linewidth=3,
-            label="sin(x)",
-            alpha=0.9,
-        )
-        ax.plot(
-            x,
-            y2,
-            color=self.theme_colors["bar_colors"][1],
-            linewidth=3,
-            label="cos(x)",
-            alpha=0.9,
-        )
-
-        # Apply formatting
-        format_axis_labels(ax, "Dark Theme Test Plot", "X Values", "Y Values")
-        format_legend(ax, loc="upper right", frameon=True, shadow=True)
-        ax.grid(True, alpha=0.3, linestyle="-", linewidth=0.8)
-
-        # Set axis limits for better appearance
-        ax.set_xlim(0, 4 * np.pi)
-        ax.set_ylim(-1.2, 1.2)
-
-        # Add subtle styling improvements
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-
-        plt.tight_layout()
-        save_plot(fig, f"{self.output_dir}/dark_theme_test.png")
-        print(f"Created dark theme test: {self.output_dir}/dark_theme_test.png")
 
     def _create_static_complexity_chart(self):
         """Create a static complexity comparison chart with known algorithmic complexities"""

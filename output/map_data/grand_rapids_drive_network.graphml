@@ -473,7 +473,7 @@
       <data key="d9">[121875401, 1248838346, 114492873, 114492861, 1091107519]</data>
       <data key="d16">yes</data>
       <data key="d10">motorway</data>
-      <data key="d17">['4', '5']</data>
+      <data key="d17">['5', '4']</data>
       <data key="d18">70 mph</data>
       <data key="d12">True</data>
       <data key="d19">US 131</data>
@@ -646,7 +646,7 @@
       <data key="d10">secondary</data>
       <data key="d17">4</data>
       <data key="d18">25 mph</data>
-      <data key="d11">['Bridge Street Northwest', 'Michigan Street Northwest']</data>
+      <data key="d11">['Michigan Street Northwest', 'Bridge Street Northwest']</data>
       <data key="d12">False</data>
       <data key="d13">False</data>
       <data key="d14">380.38313785670186</data>
@@ -875,7 +875,7 @@
     <edge source="184822419" target="184822422" id="0">
       <data key="d9">[701472113, 1388169581]</data>
       <data key="d10">secondary</data>
-      <data key="d17">['4', '5']</data>
+      <data key="d17">['5', '4']</data>
       <data key="d18">25 mph</data>
       <data key="d11">Monroe Avenue Northwest</data>
       <data key="d12">False</data>
@@ -948,7 +948,7 @@
     <edge source="184862047" target="184948259" id="0">
       <data key="d9">[1387719133, 17859797, 727388600, 727388599]</data>
       <data key="d10">primary</data>
-      <data key="d17">['4', '5']</data>
+      <data key="d17">['5', '4']</data>
       <data key="d18">25 mph</data>
       <data key="d11">Fulton Street West</data>
       <data key="d12">False</data>
@@ -1420,7 +1420,7 @@
       <data key="d10">secondary</data>
       <data key="d17">4</data>
       <data key="d18">25 mph</data>
-      <data key="d11">['Bridge Street Northwest', 'Michigan Street Northwest']</data>
+      <data key="d11">['Michigan Street Northwest', 'Bridge Street Northwest']</data>
       <data key="d12">False</data>
       <data key="d13">True</data>
       <data key="d14">380.38313785670186</data>
@@ -1676,7 +1676,7 @@
       <data key="d14">20.832175576216333</data>
       <data key="d15">LINESTRING (-85.6768895 42.9701214, -85.6768626 42.9701578, -85.6768557 42.9702351, -85.6768529 42.970263, -85.6768755 42.9703)</data>
     </edge>
-    <data key="d0">2025-06-05 19:30:25</data>
+    <data key="d0">2025-06-10 23:01:48</data>
     <data key="d1">OSMnx 2.0.3</data>
     <data key="d2">epsg:4326</data>
     <data key="d3">True</data>

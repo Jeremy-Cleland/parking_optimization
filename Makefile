@@ -26,15 +26,23 @@ help: ## Show available commands
 	@grep -E '^(setup|install|dev-tools|deps|build|docs):.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(GREEN)🧹 Cleanup & Analysis:$(NC)"
-	@grep -E '^(clean|clean-output|list-runs|show-run|cleanup-runs|status):.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^(clean|clean-output|clean-artifacts|clean-all|clean-everything|list-runs|show-run|cleanup-runs|status):.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
 
 # =============================================================================
 # 🚀 MAIN APPLICATION COMMANDS
 # =============================================================================
 
-run: ## Run simulation demo
-	@echo "$(GREEN)Running parking optimization demo...$(NC)"
-	python main.py --mode demo
+run: ## Complete end-to-end simulation with analysis and reports
+	@echo "$(GREEN)Running complete parking optimization simulation...$(NC)"
+	@echo "$(BLUE)Step 1: Ensuring map data is available...$(NC)"
+	@$(MAKE) ensure-data
+	@echo "$(BLUE)Step 2: Running full simulation...$(NC)"
+	python main.py --mode simulate --zones 20 --drivers 500
+	@echo "$(BLUE)Step 3: Generating analysis reports...$(NC)"
+	python main.py --mode analyze
+	@echo "$(BLUE)Step 4: Creating visualizations...$(NC)"
+	python main.py --mode visualize
+	@echo "$(GREEN)✅ Complete run finished! Check output/latest/ for results$(NC)"
 
 simulate: ## Run city simulation
 	@echo "$(GREEN)Running city simulation...$(NC)"
@@ -45,6 +53,21 @@ report: ## Generate analysis and visualization report
 	python main.py --mode analyze
 	python main.py --mode visualize
 	@echo "$(BLUE)Report complete! Check output/latest/ for results$(NC)"
+
+ensure-data: ## Ensure map data is available (download if missing)
+	@echo "$(GREEN)Checking map data availability...$(NC)"
+	@if [ ! -d "output/map_data" ] || [ ! -f "output/map_data/grand_rapids_drive_network.graphml" ]; then \
+		echo "$(YELLOW)Map data not found. Downloading Grand Rapids data...$(NC)"; \
+		python scripts/fetch_grand_rapids_data.py; \
+		echo "$(GREEN)✅ Map data downloaded successfully!$(NC)"; \
+	else \
+		echo "$(GREEN)✅ Map data already available.$(NC)"; \
+	fi
+
+fetch-data: ## Download Grand Rapids map data (force refresh)
+	@echo "$(GREEN)Downloading fresh Grand Rapids map data...$(NC)"
+	python scripts/fetch_grand_rapids_data.py
+	@echo "$(GREEN)✅ Map data download complete!$(NC)"
 
 # =============================================================================
 # 🧪 TESTING & CODE QUALITY
@@ -186,10 +209,34 @@ clean-output: ## Clean simulation output files
 	rm -f output/*.json output/*.png output/*.txt 2>/dev/null || true
 	rm -rf logs visualization_output 2>/dev/null || true
 
+clean-artifacts: ## Remove all simulation artifacts and run data
+	@echo "$(GREEN)Cleaning all simulation artifacts...$(NC)"
+	rm -rf output/runs/* 2>/dev/null || true
+	rm -rf output/latest 2>/dev/null || true
+	rm -rf visualization_output/* 2>/dev/null || true
+	rm -rf logs/* 2>/dev/null || true
+	rm -f output/*.json output/*.png output/*.txt 2>/dev/null || true
+	@echo "$(YELLOW)Preserving map data in output/map_data/$(NC)"
+	@echo "$(GREEN)✅ All simulation artifacts cleared!$(NC)"
+
 clean-all: ## Clean everything (temp files + output + caches)
 	@$(MAKE) clean
 	@$(MAKE) clean-output
+	@$(MAKE) clean-artifacts
 	@echo "$(GREEN)Complete cleanup finished!$(NC)"
+
+clean-everything: ## Nuclear option: clean all artifacts AND map data
+	@echo "$(RED)⚠️  WARNING: This will delete ALL data including map files!$(NC)"
+	@echo "$(YELLOW)Press Ctrl+C in the next 5 seconds to cancel...$(NC)"
+	@sleep 5
+	@echo "$(GREEN)Proceeding with complete cleanup...$(NC)"
+	@$(MAKE) clean
+	@$(MAKE) clean-output
+	rm -rf output/ 2>/dev/null || true
+	rm -rf visualization_output/ 2>/dev/null || true
+	rm -rf logs/ 2>/dev/null || true
+	rm -rf cache/ 2>/dev/null || true
+	@echo "$(GREEN)✅ Everything cleaned! Next run will download fresh data.$(NC)"
 
 # =============================================================================
 # 📊 ANALYSIS & MONITORING
@@ -221,13 +268,13 @@ show-run: ## Show latest run details
 		ls -la output/latest 2>/dev/null || echo "$(RED)No latest run$(NC)"; \
 	fi
 
-cleanup-runs: ## Clean up old runs (keep 5 most recent)
+cleanup-runs: ## Clean up old runs (keep 0)
 	@echo "$(GREEN)Cleaning up old runs...$(NC)"
 	@if [ -f scripts/manage_runs.py ]; then \
 		if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
-			eval "$$(conda shell.bash hook)" && conda activate parking_optimization && python scripts/manage_runs.py cleanup --keep 5; \
+			eval "$$(conda shell.bash hook)" && conda activate parking_optimization && python scripts/manage_runs.py cleanup --keep 0; \
 		else \
-			python scripts/manage_runs.py cleanup --keep 5; \
+			python scripts/manage_runs.py cleanup --keep 0; \
 		fi; \
 	else \
 		echo "$(YELLOW)No manage_runs.py script found$(NC)"; \
