@@ -41,12 +41,22 @@ class TrafficManager:
         self.map_provider_name = config.api.map_provider
         api_key = config.active_api_key
 
+        print("🔧 Initializing TrafficManager:")
+        print(f"   Provider: {self.map_provider_name}")
+        print(f"   API Key Available: {'✅ Yes' if api_key else '❌ No'}")
+        print(f"   Has API Keys: {config.has_api_keys}")
+
         self.map_service: Optional[MapService] = None
         if api_key:
             try:
                 self.map_service = get_map_service(self.map_provider_name, api_key)
+                print(
+                    f"   Map Service: ✅ {self.map_service.__class__.__name__} initialized"
+                )
             except (ValueError, ImportError) as e:
-                print(f"Could not initialize map service: {e}")
+                print(f"   Map Service: ❌ Failed to initialize: {e}")
+        else:
+            print("   Map Service: ❌ No API key available")
 
         # Cache to avoid excessive API calls
         self.traffic_cache = {}
@@ -58,6 +68,9 @@ class TrafficManager:
         # Rate limiting
         self.last_api_call = {}
         self.min_call_interval = 60 / config.api.max_api_calls_per_minute
+        print(
+            f"   Rate Limit: {config.api.max_api_calls_per_minute} calls/min ({self.min_call_interval:.1f}s between calls)"
+        )
 
     def get_traffic_condition(
         self, origin: Tuple[float, float], destination: Tuple[float, float]
@@ -89,19 +102,38 @@ class TrafficManager:
 
         if self.map_service and self._can_make_api_call(self.map_provider_name):
             try:
+                print(
+                    f"🌐 Making API call to {self.map_provider_name} for {segment_id}"
+                )
                 # Use bounding box for incidents, or route for specific traffic
                 bbox = [origin[0], origin[1], destination[0], destination[1]]
                 service_data = self.map_service.get_traffic_incidents(bounding_box=bbox)
                 self.last_api_call[self.map_provider_name] = time.time()
 
                 if service_data:
+                    print(f"✅ API response received: {len(service_data)} items")
                     traffic_data = self._adapt_service_output(service_data, segment_id)
+                else:
+                    print("⚠️  API returned empty response")
 
             except Exception as e:
-                print(f"API call to {self.map_provider_name} failed: {e}")
+                print(f"❌ API call to {self.map_provider_name} failed: {e}")
+        else:
+            reasons = []
+            if not self.map_service:
+                reasons.append("no map service")
+            if not self._can_make_api_call(self.map_provider_name):
+                time_since = time.time() - self.last_api_call.get(
+                    self.map_provider_name, 0
+                )
+                reasons.append(
+                    f"rate limited (last call {time_since:.1f}s ago, need {self.min_call_interval:.1f}s)"
+                )
+            print(f"⚠️  Skipping API call: {', '.join(reasons)}")
 
         # Fallback to pattern-based simulation
         if traffic_data is None:
+            print(f"🔄 Using fallback traffic simulation for {segment_id}")
             traffic_data = self._get_fallback_traffic(origin, destination)
 
         # Cache the result

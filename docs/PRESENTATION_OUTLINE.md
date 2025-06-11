@@ -28,7 +28,7 @@
 
 ### Slide 4: Dynamic Pricing Algorithm (1.5 minutes)
 
-```
+```text
 price = base × occupancy × competition × demand × time
 ```
 

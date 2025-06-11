@@ -30,7 +30,7 @@ make show-run
 
 ## Project Structure
 
-```
+```text
 parking_optimization/
 ├── core/                    # Core algorithm implementations
 │   ├── parking_zone.py      # Zone management and occupancy

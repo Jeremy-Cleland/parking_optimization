@@ -45,10 +45,8 @@ class PerformanceLogger:
 
         # File handler (if enabled)
         if self.config.output.log_to_file:
-            log_file = (
-                self.config.output.logs_dir
-                / f"{datetime.now().strftime('%Y%m%d')}_parking_optimization.log"
-            )
+            # Try to get run-specific log file if run manager is active
+            log_file = self._get_log_file_path()
 
             # Rotating file handler to prevent huge log files
             file_handler = logging.handlers.RotatingFileHandler(
@@ -58,6 +56,65 @@ class PerformanceLogger:
             )
             file_handler.setFormatter(formatter)
             self.logger.addHandler(file_handler)
+
+    def _get_log_file_path(self):
+        """Get appropriate log file path - per-run if available, otherwise global"""
+        try:
+            # Try to import run manager and get current run path
+            from core.run_manager import get_run_manager
+
+            run_manager = get_run_manager()
+            if hasattr(run_manager, "current_run_dir") and run_manager.current_run_dir:
+                # Create run-specific log file
+                log_file = run_manager.get_run_path("logs") / f"{self.logger.name}.log"
+                return log_file
+        except (ImportError, AttributeError, RuntimeError):
+            # Fall back to global log file if run manager isn't available
+            pass
+
+        # Default global log file
+        return (
+            self.config.output.logs_dir
+            / f"{datetime.now().strftime('%Y%m%d')}_parking_optimization.log"
+        )
+
+    def reconfigure_for_run(self, run_directory=None):
+        """Reconfigure logger to use run-specific log file if a run is active"""
+        if not self.config.output.log_to_file:
+            return
+
+        # Remove existing file handlers
+        handlers_to_remove = [
+            h
+            for h in self.logger.handlers
+            if isinstance(h, logging.handlers.RotatingFileHandler)
+        ]
+        for handler in handlers_to_remove:
+            self.logger.removeHandler(handler)
+
+        # Add new run-specific file handler
+        if run_directory:
+            log_file = run_directory / "logs" / f"{self.logger.name}.log"
+        else:
+            log_file = self._get_log_file_path()
+
+        # Create formatter
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+
+        # Create logs directory if needed
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Add new file handler
+        file_handler = logging.handlers.RotatingFileHandler(
+            log_file,
+            maxBytes=self.config.output.max_log_file_size_mb * 1024 * 1024,
+            backupCount=5,
+        )
+        file_handler.setFormatter(formatter)
+        self.logger.addHandler(file_handler)
 
     def debug(self, message: str, **kwargs):
         """Log debug message with optional context"""
@@ -211,6 +268,12 @@ class MetricsCollector:
 
 # Global metrics collector
 metrics = MetricsCollector()
+
+
+def reconfigure_all_loggers_for_run(run_directory):
+    """Reconfigure all active loggers to use run-specific log files"""
+    for logger in ModuleLogger._loggers.values():
+        logger.reconfigure_for_run(run_directory)
 
 
 def setup_logging():

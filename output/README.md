@@ -4,7 +4,7 @@ This directory contains all simulation results, analysis reports, and generated 
 
 ## Directory Structure
 
-```
+```text
 output/
 ├── runs/                      # Individual simulation runs
 │   ├── run_2025-12-05_19-51-49/ # Timestamped run directories

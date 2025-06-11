@@ -1,20 +1,21 @@
 {
-  "run_id": "run_2025-06-10_19-32-14",
-  "timestamp": "2025-06-10T19:32:14.647982",
+  "run_id": "run_2025-06-10_22-37-13",
+  "timestamp": "2025-06-10T22:37:13.656184",
   "mode": "demo",
   "parameters": {
     "zones": 20,
-    "drivers": 100,
-    "duration": 1.0,
+    "drivers": 300,
+    "duration": 16.0,
     "output": "output/results.json"
   },
-  "duration_seconds": 20.35404086112976,
+  "duration_seconds": 66.56994605064392,
   "status": "completed",
   "artifacts": [
     "visualizations/summary_dashboard.png",
     "visualizations/dark_theme_test.png",
     "visualizations/occupancy_heatmap.png",
     "visualizations/search_time_distribution.png",
+    "visualizations/algorithm_comparison.png",
     "visualizations/revenue_analysis.png",
     "visualizations/performance_metrics.png"
   ]

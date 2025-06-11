@@ -85,6 +85,14 @@ class RunManager:
         # Save initial metadata
         self._save_metadata()
 
+        # Reconfigure all loggers to use run-specific log files
+        try:
+            from core.logger import reconfigure_all_loggers_for_run
+
+            reconfigure_all_loggers_for_run(self.current_run_dir)
+        except ImportError:
+            pass  # Graceful fallback if logger module not available
+
         logger.info(f"Started run {run_id} in mode '{mode}'")
         logger.info(f"Run directory: {self.current_run_dir}")
 
