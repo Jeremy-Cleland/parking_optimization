@@ -106,7 +106,7 @@ def estimate_data_sizes(tile_counts):
 
 def main():
     """Calculate and display tile requirements for Grand Rapids data."""
-    print("🗺️  Map Tile Calculator for Grand Rapids Real-World Data")
+    print("  Map Tile Calculator for Grand Rapids Real-World Data")
     print("=" * 70)
 
     try:
@@ -115,7 +115,7 @@ def main():
         if map_loader.is_data_available():
             bounds = map_loader.get_simulation_bounds()
             min_lat, min_lon, max_lat, max_lon = bounds
-            print("📍 Coverage Area: Downtown Grand Rapids")
+            print("Coverage Area: Downtown Grand Rapids")
             print(
                 f"   Latitude:  {min_lat:.6f}° to {max_lat:.6f}° ({max_lat - min_lat:.6f}° range)"
             )
@@ -126,10 +126,10 @@ def main():
             # Fallback to approximate downtown Grand Rapids bounds
             min_lat, min_lon = 42.956, -85.683
             max_lat, max_lon = 42.973, -85.668
-            print("⚠️  Using approximate bounds (real data not available)")
-            print("📍 Approximate Coverage: Downtown Grand Rapids")
-            print(f"   Latitude:  {min_lat:.6f}° to {max_lat:.6f}°")
-            print(f"   Longitude: {min_lon:.6f}° to {max_lon:.6f}°")
+            print(" Using approximate bounds (real data not available)")
+            print(" Approximate Coverage: Downtown Grand Rapids")
+            print(f" Latitude:  {min_lat:.6f}° to {max_lat:.6f}°")
+            print(f" Longitude: {min_lon:.6f}° to {max_lon:.6f}°")
 
         # Calculate coverage area
         lat_km = (max_lat - min_lat) * 111.32  # 1 degree lat ≈ 111.32 km
@@ -147,7 +147,7 @@ def main():
     # Zoom levels to analyze
     zoom_levels = [10, 12, 14, 15, 16, 17, 18, 19]
 
-    print("\n📊 Tile Requirements Analysis")
+    print("\n Tile Requirements Analysis")
     print("=" * 70)
 
     # Calculate tile coverage
@@ -167,7 +167,7 @@ def main():
         )
 
     # Estimate data sizes
-    print("\n💾 Estimated Storage Requirements")
+    print("\nEstimated Storage Requirements")
     print("=" * 70)
 
     size_estimates = estimate_data_sizes(tile_data)
