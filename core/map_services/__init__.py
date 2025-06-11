@@ -36,4 +36,4 @@ def get_map_service(provider: str, api_key: str) -> MapService:
     return provider_class(api_key=api_key)
 
 
-__all__ = ["get_map_service", "MapService"]
+__all__ = ["MapService", "get_map_service"]

@@ -149,7 +149,7 @@ class ParkingZone:
         """Check if zone has available spots"""
         return len(self.available_spots) > 0
 
-    def occupy_spot(self, vehicle_id: str = None) -> bool:
+    def occupy_spot(self, vehicle_id: Optional[str] = None) -> bool:
         """
         Occupy a spot in this zone.
 
@@ -168,7 +168,7 @@ class ParkingZone:
         spot.occupy(vehicle_id or f"vehicle_{datetime.now().timestamp()}")
         return True
 
-    def release_spot(self, vehicle_id: str = None) -> bool:
+    def release_spot(self, vehicle_id: Optional[str] = None) -> bool:
         """
         Release a spot in this zone.
 

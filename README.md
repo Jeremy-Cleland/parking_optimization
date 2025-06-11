@@ -7,7 +7,7 @@ A real-time collaborative parking space optimization system built for urban envi
 This system solves urban parking challenges using advanced algorithms including:
 
 - **Dynamic Pricing**: Game theory Nash equilibrium optimization
-- **Smart Routing**: A* pathfinding with real-time traffic integration  
+- **Smart Routing**: A* pathfinding with real-time traffic integration
 - **Demand Prediction**: ML-based forecasting with historical analysis
 - **City Coordination**: Distributed optimization using divide-and-conquer
 - **Driver Psychology**: Behavioral modeling with 6 personality types
@@ -112,7 +112,7 @@ The system demonstrates:
 The system works in 100% free mode without any API keys. For enhanced accuracy with real traffic data:
 
 1. **TomTom** (default): Get free key at [developer.tomtom.com](https://developer.tomtom.com/) - 2,500 calls/day free
-2. **Mapbox** (alternative): Get free token at [mapbox.com](https://account.mapbox.com/access-tokens/) - 100k calls/month free  
+2. **Mapbox** (alternative): Get free token at [mapbox.com](https://account.mapbox.com/access-tokens/) - 100k calls/month free
 3. **Google Maps** (optional): Setup at [Google Cloud Console](https://console.cloud.google.com/) - requires credit card
 
 ```bash
@@ -128,9 +128,9 @@ See [docs/API_SETUP_GUIDE.md](docs/API_SETUP_GUIDE.md) for detailed setup instru
 
 ## Class
 
-**Course**: CIS 505 Algorithms Analysis and Design  
-**Institution**: University of Michigan - Dearborn  
-**Term**: Summer 2025  
+**Course**: CIS 505 Algorithms Analysis and Design
+**Institution**: University of Michigan - Dearborn
+**Term**: Summer 2025
 
 This project demonstrates practical application of advanced algorithms in real-world urban planning scenarios, with mathematical validation and complexity analysis.
 

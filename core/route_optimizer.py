@@ -71,8 +71,8 @@ class RouteOptimizer:
     def find_optimal_route(
         self,
         start_location: Tuple[float, float],
-        available_parking_zones: List[str] = None,
-        preferences: Dict = None,
+        available_parking_zones: Optional[List[str]] = None,
+        preferences: Optional[Dict] = None,
     ) -> Optional[RouteResult]:
         """
         Find optimal route from start location to best parking zone.
@@ -198,7 +198,7 @@ class RouteOptimizer:
         start_node: int,
         end_node: int,
         parking_zone: Dict,
-        preferences: Dict = None,
+        preferences: Optional[Dict] = None,
     ) -> Optional[RouteResult]:
         """Calculate route between two nodes."""
         try:
@@ -259,7 +259,7 @@ class RouteOptimizer:
             logger.error(f"Error calculating route: {e}")
             return None
 
-    def _get_routing_weight(self, preferences: Dict = None) -> str:
+    def _get_routing_weight(self, preferences: Optional[Dict] = None) -> str:
         """Determine which edge attribute to use for routing weight."""
         if not preferences:
             return "length"  # Default to shortest distance
@@ -271,7 +271,9 @@ class RouteOptimizer:
         else:
             return "length"
 
-    def _score_route(self, route: RouteResult, preferences: Dict = None) -> float:
+    def _score_route(
+        self, route: RouteResult, preferences: Optional[Dict] = None
+    ) -> float:
         """
         Score a route based on multiple factors.
         Lower score is better.
@@ -306,7 +308,7 @@ class RouteOptimizer:
     def find_optimal_parking(
         self,
         start_location: Tuple[float, float],
-        preferences: Dict = None,
+        preferences: Optional[Dict] = None,
     ) -> Dict[str, RouteResult]:
         """
         Find optimal parking options with multiple choices.
@@ -358,8 +360,8 @@ class RouteOptimizer:
             # Sort by score and return top options
             route_scores.sort(key=lambda x: x[0])  # Lower score is better
 
-            # Return up to 5 best options
-            for score, zone_id, route in route_scores[:5]:
+            # Return up to 20 best options (increased from 5)
+            for _score, zone_id, route in route_scores[:20]:
                 route_options[zone_id] = route
 
             logger.debug(
@@ -426,7 +428,7 @@ class RouteOptimizer:
             return
 
         # Update edge weights based on traffic data
-        for edge_id, traffic_factor in traffic_data.items():
+        for _edge_id, _traffic_factor in traffic_data.items():
             # This would need to be implemented based on how traffic data maps to edges
             # For now, it's a placeholder for the interface
             pass

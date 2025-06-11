@@ -204,7 +204,7 @@ class TestFramework:
                     "practical_behavior": "Should scale quadratically with zone count",
                 },
                 "Demand Prediction": {
-                    "theoretical": "O(t × s²)",
+                    "theoretical": "O(t x s²)",
                     "description": "Dynamic programming state optimization",
                     "practical_behavior": "Should scale quadratically with state space",
                 },
@@ -577,7 +577,7 @@ class TestFramework:
                     {
                         "name": "Dynamic Programming",
                         "application": "Demand prediction and state optimization",
-                        "complexity": "O(t × s²)",
+                        "complexity": "O(t x s²)",
                         "justification": "Optimal substructure for temporal demand patterns",
                     },
                     {
@@ -914,7 +914,7 @@ class TestFramework:
                     ax3.grid(True, alpha=0.3)
 
                     # Add value labels on bars
-                    for i, bar in enumerate(bars):
+                    for _i, bar in enumerate(bars):
                         height = bar.get_height()
                         ax3.text(
                             bar.get_x() + bar.get_width() / 2.0,
@@ -1022,7 +1022,6 @@ class TestFramework:
                     "Coordination",
                     "Selection",
                 ]
-                complexities = ["O(n log n)", "O(n²)", "O(n^1.5)", "O(n)", "O(n log n)"]
 
                 # Create a pie chart of computational distribution (mock data)
                 comp_distribution = [
@@ -1137,7 +1136,7 @@ def main():
 
     try:
         # Run all tests
-        results = framework.run_comprehensive_tests()
+        framework.run_comprehensive_tests()
 
         # Generate visualizations
         framework.generate_visualizations()

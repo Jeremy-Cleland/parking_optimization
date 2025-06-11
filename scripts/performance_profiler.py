@@ -151,7 +151,7 @@ class PerformanceProfiler:
                 min(10, len(nodes) // 2)
             ):  # Find paths based on available nodes
                 start_node = nodes[0]
-                end_node = nodes[-1] if len(nodes) > 1 else nodes[0]
+                nodes[-1] if len(nodes) > 1 else nodes[0]
 
                 try:
                     # Test the find_optimal_parking method
@@ -290,7 +290,7 @@ class PerformanceProfiler:
             scaling_results["routing"].append(result)
 
         # Simulation scaling
-        for n_zones, n_drivers in sim_sizes:
+        for _n_zones, n_drivers in sim_sizes:
             result = self.profile_simulation(n_drivers)
             scaling_results["simulation"].append(result)
 
@@ -486,7 +486,7 @@ def main():
         start = time.time()
         engine = DynamicPricingEngine()
         zone = ParkingZone("test", "Test", (0, 0), 50, 3.0)
-        price = engine.calculate_zone_price(zone, [])
+        engine.calculate_zone_price(zone, [])
         pricing_time = time.time() - start
 
         print(f"Single price calculation: {pricing_time * 1000:.2f}ms")

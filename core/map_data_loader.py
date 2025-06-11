@@ -30,7 +30,7 @@ class MapDataLoader:
         Args:
             data_dir: Directory containing map data files. If None, uses default.
         """
-        config = get_config()
+        get_config()
         self.data_dir = Path(data_dir) if data_dir else Path("output/map_data")
 
         # Initialize data containers

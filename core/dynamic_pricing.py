@@ -5,7 +5,7 @@ Uses game-theoretic principles and approximation algorithms
 
 import warnings
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import numpy as np
 from sklearn.linear_model import LinearRegression
@@ -66,7 +66,7 @@ class DynamicPricingEngine:
         self,
         zone: ParkingZone,
         nearby_zones: List[ParkingZone],
-        demand_forecast: float = None,
+        demand_forecast: Optional[float] = None,
     ) -> float:
         """
         Calculate optimal price for a zone using approximation algorithm
@@ -324,7 +324,7 @@ class ElasticityLearner:
         weekdays = np.array([d["timestamp"].weekday() for d in historical_data])
 
         # Create feature matrix
-        X = np.column_stack(
+        x = np.column_stack(
             [
                 log_prices,
                 hours / 24,  # Normalized hour
@@ -338,7 +338,7 @@ class ElasticityLearner:
 
         # Fit regression model
         model = LinearRegression()
-        model.fit(X, y)
+        model.fit(x, y)
 
         # Price elasticity is the coefficient of log_price
         elasticity = model.coef_[0]
@@ -346,15 +346,17 @@ class ElasticityLearner:
         self.zone_elasticities[zone_id] = {
             "elasticity": elasticity,
             "model": model,
-            "r_squared": model.score(X, y),
+            "r_squared": model.score(x, y),
             "sample_size": len(historical_data),
         }
 
         print(
-            f"Learned elasticity for {zone_id}: {elasticity:.3f} (R²={model.score(X, y):.3f})"
+            f"Learned elasticity for {zone_id}: {elasticity:.3f} (R²={model.score(x, y):.3f})"
         )
 
-    def get_elasticity(self, zone_id: str, current_time: datetime = None) -> float:
+    def get_elasticity(
+        self, zone_id: str, current_time: Optional[datetime] = None
+    ) -> float:
         """Get elasticity for a zone, with time-based adjustments"""
         if zone_id not in self.zone_elasticities:
             return self.global_elasticity
@@ -372,7 +374,10 @@ class ElasticityLearner:
         return base_elasticity
 
     def predict_demand_change(
-        self, zone_id: str, price_change_pct: float, current_time: datetime = None
+        self,
+        zone_id: str,
+        price_change_pct: float,
+        current_time: Optional[datetime] = None,
     ) -> float:
         """
         Predict how demand changes with price change

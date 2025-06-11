@@ -1,14 +1,14 @@
 {
-  "run_id": "run_2025-06-10_19-28-19",
-  "timestamp": "2025-06-10T19:28:19.940936",
-  "mode": "demo",
+  "run_id": "run_2025-06-10_19-34-12",
+  "timestamp": "2025-06-10T19:34:12.965271",
+  "mode": "visualize",
   "parameters": {
     "zones": 20,
-    "drivers": 100,
-    "duration": 1.0,
+    "drivers": 200,
+    "duration": 4.0,
     "output": "output/results.json"
   },
-  "duration_seconds": 21.089709997177124,
+  "duration_seconds": 0.004770994186401367,
   "status": "completed",
   "artifacts": [
     "visualizations/summary_dashboard.png",

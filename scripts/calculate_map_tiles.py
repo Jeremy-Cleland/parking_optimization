@@ -7,6 +7,7 @@ import math
 import os
 import sys
 
+# Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.map_data_loader import get_map_data_loader
@@ -42,9 +43,7 @@ def calculate_tile_coverage(min_lat, min_lon, max_lat, max_lon, zoom_levels):
 
         # Calculate area per tile at this zoom level
         world_tiles_at_zoom = 2**zoom
-        area_per_tile_deg2 = (360.0 / world_tiles_at_zoom) * (
-            180.0 / world_tiles_at_zoom
-        )
+        (360.0 / world_tiles_at_zoom) * (180.0 / world_tiles_at_zoom)
 
         # Estimate tile size in meters (approximate, varies by latitude)
         earth_circumference = 40075017  # meters at equator
@@ -138,7 +137,7 @@ def main():
         lon_km = (max_lon - min_lon) * 111.32 * math.cos(math.radians(avg_lat))
         area_km2 = lat_km * lon_km
 
-        print(f"   Dimensions: {lat_km:.2f} km × {lon_km:.2f} km")
+        print(f"   Dimensions: {lat_km:.2f} km x {lon_km:.2f} km")
         print(f"   Total Area: {area_km2:.2f} km²")
 
     except Exception as e:
@@ -163,7 +162,7 @@ def main():
     for data in tile_data:
         print(
             f"{data['zoom']:<5} {data['tiles_x']:<8} {data['tiles_y']:<8} {data['total_tiles']:<8} "
-            f"{data['tile_width_meters']:.0f}×{data['tile_height_meters']:.0f}m{'':<5} "
+            f"{data['tile_width_meters']:.0f}x{data['tile_height_meters']:.0f}m{'':<5} "
             f"{data['area_per_tile_km2']:.3f} km²"
         )
 

@@ -66,7 +66,7 @@ def analyze_parking_zone_reachability(largest_component, parking_zones):
     unreachable_zones = []
 
     # Test a node from the largest component
-    test_node = next(iter(largest_component))
+    next(iter(largest_component))
 
     for zone in parking_zones:
         zone_node = route_optimizer._find_nearest_node(zone["coordinates"])
@@ -228,9 +228,11 @@ def main():
 
     try:
         # Step 1: Analyze network connectivity
-        largest_component, components, parking_zones = (
-            analyze_road_network_connectivity()
-        )
+        (
+            largest_component,
+            components,
+            parking_zones,
+        ) = analyze_road_network_connectivity()
 
         # Step 2: Analyze parking zone reachability
         reachable_zones = analyze_parking_zone_reachability(

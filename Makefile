@@ -105,15 +105,30 @@ quality: ## Run all quality checks (lint, format, type-check, test)
 
 install: ## Install package in development mode
 	@echo "$(GREEN)Installing package in development mode...$(NC)"
-	conda activate parking_optimization && pip install -e .
+	@if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
+		echo "Activating conda environment..."; \
+		eval "$$(conda shell.bash hook)" && conda activate parking_optimization && pip install -e .; \
+	else \
+		pip install -e .; \
+	fi
 
 install-dev: ## Install with development dependencies
 	@echo "$(GREEN)Installing with development dependencies...$(NC)"
-	conda activate parking_optimization && pip install -e ".[dev]"
+	@if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
+		echo "Activating conda environment..."; \
+		eval "$$(conda shell.bash hook)" && conda activate parking_optimization && pip install -e ".[dev]"; \
+	else \
+		pip install -e ".[dev]"; \
+	fi
 
 dev-tools: ## Install and setup all development tools
 	@echo "$(GREEN)Setting up development tools...$(NC)"
-	conda activate parking_optimization && pip install -e ".[dev]"
+	@if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
+		echo "Activating conda environment..."; \
+		eval "$$(conda shell.bash hook)" && conda activate parking_optimization && pip install -e ".[dev]"; \
+	else \
+		pip install -e ".[dev]"; \
+	fi
 	@echo "$(GREEN)Installing pre-commit hooks...$(NC)"
 	@pre-commit install || pip install pre-commit && pre-commit install
 	@echo "$(BLUE)Development tools setup complete!$(NC)"
@@ -132,12 +147,21 @@ deps: ## Update dependencies
 	@if [ -f environment.yml ]; then \
 		conda env update -f environment.yml; \
 	else \
-		conda activate parking_optimization && pip install -e ".[dev]" --upgrade; \
+		if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
+			eval "$$(conda shell.bash hook)" && conda activate parking_optimization && pip install -e ".[dev]" --upgrade; \
+		else \
+			pip install -e ".[dev]" --upgrade; \
+		fi; \
 	fi
 
 build: ## Build package for distribution
 	@echo "$(GREEN)Building package...$(NC)"
-	conda activate parking_optimization && python -m build
+	@if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
+		echo "Activating conda environment..."; \
+		eval "$$(conda shell.bash hook)" && conda activate parking_optimization && python -m build; \
+	else \
+		python -m build; \
+	fi
 
 docs: ## Generate documentation
 	@echo "$(GREEN)Generating documentation...$(NC)"
@@ -174,7 +198,11 @@ clean-all: ## Clean everything (temp files + output + caches)
 list-runs: ## List all simulation runs
 	@echo "$(GREEN)Listing simulation runs...$(NC)"
 	@if [ -f scripts/manage_runs.py ]; then \
-		conda activate parking_optimization && python scripts/manage_runs.py list; \
+		if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
+			eval "$$(conda shell.bash hook)" && conda activate parking_optimization && python scripts/manage_runs.py list; \
+		else \
+			python scripts/manage_runs.py list; \
+		fi; \
 	else \
 		echo "$(YELLOW)No manage_runs.py script found$(NC)"; \
 		ls -la output/runs/ 2>/dev/null || echo "$(RED)No runs directory$(NC)"; \
@@ -183,7 +211,11 @@ list-runs: ## List all simulation runs
 show-run: ## Show latest run details
 	@echo "$(GREEN)Showing latest run...$(NC)"
 	@if [ -f scripts/manage_runs.py ]; then \
-		conda activate parking_optimization && python scripts/manage_runs.py list | grep -E "run_[0-9]" | head -1 | awk '{print $$2}' | xargs -I {} python scripts/manage_runs.py show {}; \
+		if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
+			eval "$$(conda shell.bash hook)" && conda activate parking_optimization && python scripts/manage_runs.py list | grep -E "run_[0-9]" | head -1 | awk '{print $$2}' | xargs -I {} python scripts/manage_runs.py show {}; \
+		else \
+			python scripts/manage_runs.py list | grep -E "run_[0-9]" | head -1 | awk '{print $$2}' | xargs -I {} python scripts/manage_runs.py show {}; \
+		fi; \
 	else \
 		echo "$(YELLOW)No manage_runs.py script found$(NC)"; \
 		ls -la output/latest 2>/dev/null || echo "$(RED)No latest run$(NC)"; \
@@ -192,7 +224,11 @@ show-run: ## Show latest run details
 cleanup-runs: ## Clean up old runs (keep 5 most recent)
 	@echo "$(GREEN)Cleaning up old runs...$(NC)"
 	@if [ -f scripts/manage_runs.py ]; then \
-		conda activate parking_optimization && python scripts/manage_runs.py cleanup --keep 5; \
+		if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
+			eval "$$(conda shell.bash hook)" && conda activate parking_optimization && python scripts/manage_runs.py cleanup --keep 5; \
+		else \
+			python scripts/manage_runs.py cleanup --keep 5; \
+		fi; \
 	else \
 		echo "$(YELLOW)No manage_runs.py script found$(NC)"; \
 	fi

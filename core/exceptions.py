@@ -190,17 +190,17 @@ def handle_api_errors(func):
         except Exception as e:
             # Convert common exceptions to our custom ones
             if "timeout" in str(e).lower():
-                raise APIError(f"API timeout: {e}", "unknown")
+                raise APIError(f"API timeout: {e}", "unknown") from e
             elif "connection" in str(e).lower():
-                raise APIError(f"Connection error: {e}", "unknown")
+                raise APIError(f"Connection error: {e}", "unknown") from e
             elif "404" in str(e):
-                raise APIError(f"API endpoint not found: {e}", "unknown", 404)
+                raise APIError(f"API endpoint not found: {e}", "unknown", 404) from e
             elif "401" in str(e) or "403" in str(e):
-                raise APIError(f"API authentication error: {e}", "unknown", 401)
+                raise APIError(f"API authentication error: {e}", "unknown", 401) from e
             elif "429" in str(e):
-                raise APIError(f"API rate limit exceeded: {e}", "unknown", 429)
+                raise APIError(f"API rate limit exceeded: {e}", "unknown", 429) from e
             else:
-                raise APIError(f"Unexpected API error: {e}", "unknown")
+                raise APIError(f"Unexpected API error: {e}", "unknown") from e
 
     return wrapper
 

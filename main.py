@@ -196,7 +196,7 @@ def main():
         try:
             duration = time.time() - start_time
             complete_run("interrupted", duration)
-        except:
+        except Exception:
             pass
         main_logger.warning("System interrupted by user")
         print("\n⚠️  System interrupted by user")
@@ -206,7 +206,7 @@ def main():
         try:
             duration = time.time() - start_time
             complete_run("failed", duration)
-        except:
+        except Exception:
             pass
         main_logger.error(f"System execution failed: {e}")
         print(f"\n❌ System execution failed: {e}")

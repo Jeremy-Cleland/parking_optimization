@@ -2,7 +2,7 @@
 
 ## CIS 505 - Algorithms Analysis and Design Term Project Report
 
-**Team Members:** [Your Names Here]  
+**Team Members:** [Your Names Here]
 **Date:** June 2025
 
 ---
@@ -158,7 +158,7 @@ function calculateZonePrice(zone, nearbyZones, demandForecast):
     competitionFactor = calculateCompetition(zone, nearbyZones)
     demandFactor = calculateDemandFactor(demandForecast)
     timeFactor = calculateTimeFactor(currentTime, zone.type)
-    
+
     newPrice = zone.basePrice × factors...
     return clip(smoothPriceChange(zone.currentPrice, newPrice), min, max)
 ```
@@ -169,16 +169,16 @@ function calculateZonePrice(zone, nearbyZones, demandForecast):
 function modifiedAStar(start, goal, preferences):
     openSet = PriorityQueue([(0, start)])
     gScore[start] = 0
-    
+
     while openSet not empty:
         current = openSet.pop()
         if current == goal:
             return reconstructPath(cameFrom, current)
-        
+
         for neighbor in getNeighbors(current):
             edgeCost = calculateDynamicCost(edge, traffic, preferences)
             tentativeG = gScore[current] + edgeCost
-            
+
             if tentativeG < gScore[neighbor]:
                 gScore[neighbor] = tentativeG
                 fScore = tentativeG + heuristic(neighbor, goal)

@@ -291,7 +291,7 @@ class DriverBehaviorModel:
         elif profile.personality_type == PersonalityType.RISK_AVERSE:
             # Prefer options with lower variance in outcomes
             # For simplicity, prefer familiar zones
-            for option, score in scored_options:
+            for option, _score in scored_options:
                 if option.get("zone_id", "") in profile.preferred_zones:
                     return option
             return scored_options[0][0]
@@ -305,7 +305,7 @@ class DriverBehaviorModel:
 
         elif profile.personality_type == PersonalityType.HABITUAL:
             # Strong preference for familiar zones
-            for option, score in scored_options:
+            for option, _score in scored_options:
                 if option.get("zone_id", "") in profile.preferred_zones:
                     return option
             # If no familiar options, reluctantly choose best

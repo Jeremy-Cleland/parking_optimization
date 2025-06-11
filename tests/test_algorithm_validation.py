@@ -700,7 +700,7 @@ class AlgorithmValidationSuite:
                 "complexity_classes": {
                     "Route Optimization": "O((V + E) log V) per request",
                     "Dynamic Pricing": "O(z²) where z = number of zones",
-                    "Demand Prediction": "O(t × s² × w) where t=time, s=states, w=weather",
+                    "Demand Prediction": "O(t x s² x w) where t=time, s=states, w=weather",
                     "City Coordination": "O(z²/d + d²) where d = districts",
                 },
             },
@@ -801,9 +801,7 @@ class AlgorithmValidationSuite:
                     "complexity_analysis" in self.results
                     and "results" in self.results["complexity_analysis"]
                 ):
-                    alg_names = list(
-                        self.results["complexity_analysis"]["results"].keys()
-                    )
+                    list(self.results["complexity_analysis"]["results"].keys())
                     # Create sample complexity visualization
                     x = np.linspace(1, 100, 100)
 

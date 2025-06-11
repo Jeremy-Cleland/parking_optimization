@@ -304,13 +304,13 @@ class ParkingVisualizer:
             color=self.theme_colors["text_color"],
             fontsize=12,
             fontweight="bold",
-            bbox=dict(
-                boxstyle="round,pad=0.5",
-                facecolor=self.theme_colors["grid_color"],
-                alpha=0.8,
-                edgecolor=self.theme_colors["main_color"],
-                linewidth=1,
-            ),
+            bbox={
+                "boxstyle": "round,pad=0.5",
+                "facecolor": self.theme_colors["grid_color"],
+                "alpha": 0.8,
+                "edgecolor": self.theme_colors["main_color"],
+                "linewidth": 1,
+            },
         )
 
         plt.tight_layout()
@@ -402,13 +402,13 @@ class ParkingVisualizer:
             color=self.theme_colors["text_color"],
             fontsize=11,
             fontfamily="monospace",
-            bbox=dict(
-                boxstyle="round,pad=0.6",
-                facecolor=self.theme_colors["grid_color"],
-                alpha=0.9,
-                edgecolor=self.theme_colors["main_color"],
-                linewidth=1.5,
-            ),
+            bbox={
+                "boxstyle": "round,pad=0.6",
+                "facecolor": self.theme_colors["grid_color"],
+                "alpha": 0.9,
+                "edgecolor": self.theme_colors["main_color"],
+                "linewidth": 1.5,
+            },
         )
 
         plt.tight_layout()
@@ -442,7 +442,7 @@ class ParkingVisualizer:
         fig, ax = plt.subplots(figsize=(16, 10))
 
         # Convert to hours for x-axis
-        hours = [i * 5 / 60 for i in range(n_steps)]
+        [i * 5 / 60 for i in range(n_steps)]
 
         # Use improved colormap with better dark theme compatibility
         from matplotlib.colors import LinearSegmentedColormap
@@ -552,7 +552,7 @@ class ParkingVisualizer:
             )
 
         # Add complexity annotations
-        for i, (algo, comp) in enumerate(zip(algorithms, complexities)):
+        for i, (_algo, comp) in enumerate(zip(algorithms, complexities)):
             ax.text(
                 0.1,
                 i,
@@ -671,26 +671,26 @@ class ParkingVisualizer:
             verticalalignment="top",
             fontfamily="monospace",
             color=self.theme_colors["text_color"],
-            bbox=dict(
-                boxstyle="round,pad=0.8",
-                facecolor=self.theme_colors["grid_color"],
-                alpha=0.9,
-                edgecolor=self.theme_colors["main_color"],
-                linewidth=2,
-            ),
+            bbox={
+                "boxstyle": "round,pad=0.8",
+                "facecolor": self.theme_colors["grid_color"],
+                "alpha": 0.9,
+                "edgecolor": self.theme_colors["main_color"],
+                "linewidth": 2,
+            },
         )
 
         # 2. Occupancy over time (top middle and right)
         ax2 = fig.add_subplot(gs[0, 1:])
         time_steps = [i * 5 / 60 for i in range(len(metrics["avg_occupancy"]))]  # hours
-        occupancy_line = ax2.plot(
+        ax2.plot(
             time_steps,
             np.array(metrics["avg_occupancy"]) * 100,
             color=self.theme_colors["main_color"],
             linewidth=3,
             alpha=0.9,
         )
-        target_line = ax2.axhline(
+        ax2.axhline(
             y=85,
             color=self.theme_colors["bar_colors"][3],
             linestyle="--",
@@ -819,10 +819,10 @@ class ParkingVisualizer:
         )
         complexity_text += "Pricing (Game Theory):  O(z²) - z=zones\n"
         complexity_text += (
-            "Prediction (DP):        O(t × s² × w) - t=time, s=states, w=weather\n"
+            "Prediction (DP):        O(t x s² x w) - t=time, s=states, w=weather\n"
         )
         complexity_text += "Coordination (D&C):     O(z²/d + d²) - d=districts\n"
-        complexity_text += "Overall System:         O(D × V log V + z²) - D=drivers"
+        complexity_text += "Overall System:         O(D x V log V + z²) - D=drivers"
 
         ax6.text(
             0.5,
@@ -834,13 +834,13 @@ class ParkingVisualizer:
             va="center",
             fontfamily="monospace",
             color=self.theme_colors["text_color"],
-            bbox=dict(
-                boxstyle="round,pad=0.8",
-                facecolor=self.theme_colors["grid_color"],
-                alpha=0.9,
-                edgecolor=self.theme_colors["main_color"],
-                linewidth=2,
-            ),
+            bbox={
+                "boxstyle": "round,pad=0.8",
+                "facecolor": self.theme_colors["grid_color"],
+                "alpha": 0.9,
+                "edgecolor": self.theme_colors["main_color"],
+                "linewidth": 2,
+            },
         )
 
         plt.tight_layout()

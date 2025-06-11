@@ -10,6 +10,7 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 
+# Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from analysis.viz_utils import (
@@ -153,7 +154,7 @@ class ComplexityAnalyzer:
                 start_time = time.time()
                 for start_loc in start_locations:
                     try:
-                        recommendations = router.find_optimal_parking(
+                        router.find_optimal_parking(
                             start_location=start_loc,
                             preferences={"max_walk_distance": 0.5},
                         )
@@ -216,7 +217,7 @@ class ComplexityAnalyzer:
             # Generate synthetic training data in the correct format
             # _build_dp_table expects List[List[Dict]] for all time slots in a week (168)
             slot_data = []
-            for hour in range(predictor.time_slots_per_week):  # Full week (168 hours)
+            for _hour in range(predictor.time_slots_per_week):  # Full week (168 hours)
                 # Create data for this time slot
                 slot_entries = []
                 # Vary the number of data points based on test size

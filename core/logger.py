@@ -10,7 +10,7 @@ import sys
 import time
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Callable, Optional
+from typing import Callable, ClassVar, Dict, Optional
 
 from .config import get_config
 
@@ -117,7 +117,7 @@ class PerformanceLogger:
 class ModuleLogger:
     """Logger factory for different modules"""
 
-    _loggers = {}
+    _loggers: ClassVar[Dict[str, PerformanceLogger]] = {}
 
     @classmethod
     def get_logger(cls, module_name: str) -> PerformanceLogger:

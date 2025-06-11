@@ -132,7 +132,7 @@ class CitySimulator:
             center_lon = (lon_min + lon_max) / 2
 
             # Create districts around Grand Rapids downtown
-            districts = [
+            [
                 {
                     "id": "downtown_core",
                     "center": (center_lat, center_lon),
@@ -160,32 +160,7 @@ class CitySimulator:
             ]
         else:
             # Fallback districts if bounds not available
-            districts = [
-                {
-                    "id": "district_1",
-                    "center": (42.963, -85.668),
-                    "radius_km": 0.5,
-                    "zone_type": "commercial",
-                },
-                {
-                    "id": "district_2",
-                    "center": (42.968, -85.673),
-                    "radius_km": 0.3,
-                    "zone_type": "mixed",
-                },
-                {
-                    "id": "district_3",
-                    "center": (42.971, -85.670),
-                    "radius_km": 0.3,
-                    "zone_type": "commercial",
-                },
-                {
-                    "id": "district_4",
-                    "center": (42.965, -85.675),
-                    "radius_km": 0.3,
-                    "zone_type": "residential",
-                },
-            ]
+            pass
 
         # Initialize coordinator with parking zones
         self.coordinator.divide_city_into_districts(self.parking_zones)
@@ -537,7 +512,7 @@ class CitySimulator:
                 min(3, len(self.map_loader.road_network.edges())),
             )
 
-            for u, v, edge_data in sample_edges:
+            for u, v, _edge_data in sample_edges:
                 # Get coordinates from road network
                 start_coords = (
                     self.map_loader.road_network.nodes[u]["y"],

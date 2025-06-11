@@ -222,7 +222,7 @@ class CityCoordinator:
         overflow_districts = []
         underflow_districts = []
 
-        for district_id, results in district_results.items():
+        for district_id, _results in district_results.items():
             district = self.districts[district_id]
             if district.average_occupancy > 0.9:
                 overflow_districts.append((district_id, district.average_occupancy))
@@ -241,7 +241,7 @@ class CityCoordinator:
             best_match = None
             best_distance = float("inf")
 
-            for i, (underflow_id, underflow_occ) in enumerate(underflow_districts):
+            for i, (underflow_id, _underflow_occ) in enumerate(underflow_districts):
                 distance = self._district_distance(overflow_id, underflow_id)
                 if distance < best_distance:
                     best_distance = distance
@@ -354,7 +354,7 @@ class CityCoordinator:
 
         # Calculate average price
         all_prices = []
-        for district_id, d_results in results["district_results"].items():
+        for _district_id, d_results in results["district_results"].items():
             all_prices.extend(d_results["zone_prices"].values())
 
         self.global_metrics["average_price"] = np.mean(all_prices) if all_prices else 0

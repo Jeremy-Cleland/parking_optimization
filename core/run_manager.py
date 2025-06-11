@@ -49,7 +49,7 @@ class RunManager:
         self.current_run: Optional[RunMetadata] = None
         self.current_run_dir: Optional[Path] = None
 
-    def start_run(self, mode: str, parameters: Dict = None) -> str:
+    def start_run(self, mode: str, parameters: Optional[Dict] = None) -> str:
         """
         Start a new simulation run
 
@@ -113,8 +113,8 @@ class RunManager:
     def save_artifact(
         self,
         filename: str,
-        content: str = None,
-        source_path: str = None,
+        content: Optional[str] = None,
+        source_path: Optional[str] = None,
         subdir: str = "",
     ) -> Path:
         """
@@ -306,7 +306,7 @@ def get_run_manager() -> RunManager:
     return _run_manager
 
 
-def start_run(mode: str, parameters: Dict = None) -> str:
+def start_run(mode: str, parameters: Optional[Dict] = None) -> str:
     """Start a new simulation run"""
     return get_run_manager().start_run(mode, parameters)
 
@@ -317,7 +317,10 @@ def get_run_path(subdir: str = "") -> Path:
 
 
 def save_artifact(
-    filename: str, content: str = None, source_path: str = None, subdir: str = ""
+    filename: str,
+    content: Optional[str] = None,
+    source_path: Optional[str] = None,
+    subdir: str = "",
 ) -> Path:
     """Save an artifact to the current run directory"""
     return get_run_manager().save_artifact(filename, content, source_path, subdir)

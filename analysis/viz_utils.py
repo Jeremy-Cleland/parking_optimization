@@ -82,7 +82,7 @@ def get_theme_colors() -> Dict[str, str]:
     return DEFAULT_THEME
 
 
-def create_custom_colormap(colors: list = None):
+def create_custom_colormap(colors: Optional[list] = None):
     """Create a custom colormap from theme colors."""
     colors = DEFAULT_THEME["bar_colors"]
 
@@ -91,7 +91,12 @@ def create_custom_colormap(colors: list = None):
     return LinearSegmentedColormap.from_list("custom", colors)
 
 
-def format_axis_labels(ax, title: str = None, xlabel: str = None, ylabel: str = None):
+def format_axis_labels(
+    ax,
+    title: Optional[str] = None,
+    xlabel: Optional[str] = None,
+    ylabel: Optional[str] = None,
+):
     """Apply consistent formatting to axis labels with theme colors."""
     theme = DEFAULT_THEME
 
