@@ -8,6 +8,12 @@
 - Team members
 - CIS 505 - Summer 2025
 
+## Team
+
+- **Jeremy Cleland**
+- **Saif Khan**
+- **Asem Zahran**
+
 ### Slide 2: Problem & Motivation (1 minute)
 
 - Urban parking challenges

@@ -1,5 +1,20 @@
 # Project Overview - Parking Optimization System
 
+## Class
+
+**Course**: CIS 505 Algorithms Analysis and Design
+**Institution**: University of Michigan - Dearborn
+**Term**: Summer 2025
+
+This project demonstrates practical application of advanced algorithms in real-world urban planning scenarios, with mathematical validation and complexity analysis.
+
+## Team
+
+- **Jeremy Cleland**
+- **Saif Khan**
+- **Asem Zahran**
+-
+
 ## Executive Summary
 
 This is a comprehensive real-time parking optimization system developed for CIS 505 (Algorithms Analysis and Design) at the University of Michigan - Dearborn. The system demonstrates advanced algorithmic techniques applied to solve real-world urban parking challenges.

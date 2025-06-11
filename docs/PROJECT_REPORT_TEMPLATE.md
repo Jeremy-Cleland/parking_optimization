@@ -2,7 +2,12 @@
 
 ## CIS 505 - Algorithms Analysis and Design Term Project Report
 
-**Team Members:** [Your Names Here]
+**Team Members:**
+
+- **Jeremy Cleland**
+- **Saif Khan**
+- **Asem Zahran**
+
 **Date:** June 2025
 
 ---

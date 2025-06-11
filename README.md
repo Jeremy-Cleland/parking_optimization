@@ -162,6 +162,12 @@ See [docs/API_SETUP_GUIDE.md](docs/API_SETUP_GUIDE.md) for detailed setup instru
 
 This project demonstrates practical application of advanced algorithms in real-world urban planning scenarios, with mathematical validation and complexity analysis.
 
+## Team
+
+- **Jeremy Cleland**
+- **Saif Khan**
+- **Asem Zahran**
+
 ## Dependencies
 
 - Python 3.8+
