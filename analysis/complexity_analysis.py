@@ -119,10 +119,7 @@ class ComplexityAnalyzer:
             map_loader = MapDataLoader("output/map_data")
             map_loader.load_all_data()
 
-            router = RouteOptimizer(
-                road_network=map_loader.road_network,
-                parking_zones=map_loader.get_parking_zones(),
-            )
+            router = RouteOptimizer()
 
             node_count = len(map_loader.road_network.nodes())
             edge_count = len(map_loader.road_network.edges())

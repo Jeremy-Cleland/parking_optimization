@@ -136,7 +136,7 @@ class PerformanceProfiler:
                     if i > 0:  # Connect to top neighbor
                         road_network.add_edge(node_id, node_id - 20, length=100)
 
-            optimizer = RouteOptimizer(road_network=road_network, parking_zones=[])
+            optimizer = RouteOptimizer()
             node_count = len(road_network.nodes())
             edge_count = len(road_network.edges())
 

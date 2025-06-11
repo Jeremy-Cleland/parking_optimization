@@ -523,6 +523,8 @@ class ParkingVisualizer:
 
         if not complexity:
             print("No algorithm complexity data available")
+            # Create a static complexity comparison instead
+            self._create_static_complexity_chart()
             return
 
         fig, ax = plt.subplots(figsize=(12, 8))
@@ -915,6 +917,106 @@ class ParkingVisualizer:
         plt.tight_layout()
         save_plot(fig, f"{self.output_dir}/dark_theme_test.png")
         print(f"Created dark theme test: {self.output_dir}/dark_theme_test.png")
+
+    def _create_static_complexity_chart(self):
+        """Create a static complexity comparison chart with known algorithmic complexities"""
+        fig, ax = plt.subplots(figsize=(12, 8))
+
+        # Define known algorithm complexities
+        algorithms = [
+            "Route Optimization\n(A* Algorithm)",
+            "Dynamic Pricing\n(Game Theory)",
+            "Demand Prediction\n(Dynamic Programming)",
+            "City Coordination\n(Divide & Conquer)",
+            "Zone Selection\n(Greedy Heuristic)",
+        ]
+
+        complexities = [
+            "O((V + E) log V)",
+            "O(z²)",
+            "O(t x s² x w)",
+            "O(z²/d + d²)",
+            "O(z log z)",
+        ]
+
+        # Create bar positions
+        y_pos = np.arange(len(algorithms))
+
+        # Create horizontal bar chart
+        bars = ax.barh(y_pos, np.arange(len(algorithms)), alpha=0.8)
+
+        # Color code by algorithm type using theme colors
+        for i, bar in enumerate(bars):
+            bar.set_color(
+                self.theme_colors["bar_colors"][
+                    i % len(self.theme_colors["bar_colors"])
+                ]
+            )
+
+        # Add complexity annotations
+        for i, comp in enumerate(complexities):
+            ax.text(
+                0.1,
+                i,
+                comp,
+                va="center",
+                fontweight="bold",
+                color=self.theme_colors["text_color"],
+                fontsize=11,
+            )
+
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(algorithms, fontsize=10)
+        format_axis_labels(
+            ax, "Algorithm Complexity Comparison", "Algorithmic Complexity"
+        )
+        ax.set_xlim(0, len(algorithms))
+
+        # Remove x-axis as it's not meaningful
+        ax.set_xticks([])
+
+        # Add legend using theme colors
+        legend_elements = [
+            plt.Rectangle(
+                (0, 0),
+                1,
+                1,
+                fc=self.theme_colors["bar_colors"][0],
+                label="Routing (A*)",
+            ),
+            plt.Rectangle(
+                (0, 0),
+                1,
+                1,
+                fc=self.theme_colors["bar_colors"][1],
+                label="Pricing (Game Theory)",
+            ),
+            plt.Rectangle(
+                (0, 0),
+                1,
+                1,
+                fc=self.theme_colors["bar_colors"][2],
+                label="Prediction (DP)",
+            ),
+            plt.Rectangle(
+                (0, 0),
+                1,
+                1,
+                fc=self.theme_colors["bar_colors"][3],
+                label="Coordination (D&C)",
+            ),
+            plt.Rectangle(
+                (0, 0),
+                1,
+                1,
+                fc=self.theme_colors["bar_colors"][4],
+                label="Selection (Greedy)",
+            ),
+        ]
+        ax.legend(handles=legend_elements, loc="lower right", fontsize=10)
+
+        plt.tight_layout()
+        save_plot(fig, f"{self.output_dir}/algorithm_comparison.png")
 
 
 if __name__ == "__main__":
