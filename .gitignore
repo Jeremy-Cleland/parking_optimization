@@ -155,7 +155,6 @@ maps/
 *.jpeg
 *.gif
 *.svg
-*.html
 
 # Exception: Allow showcase directory for sharing/upload
 !showcase/
