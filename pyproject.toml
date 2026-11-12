@@ -14,15 +14,11 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.13"
 dependencies = [
+    "networkx>=3.0",
     "numpy>=1.21.0",
     "matplotlib>=3.4.0",
     "seaborn>=0.11.0",
@@ -39,6 +35,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+apple = ["mlx==0.32.4; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
@@ -72,10 +69,16 @@ exclude = [
     "htmlcov*",
 ]
 
+[tool.setuptools]
+py-modules = ["main"]
+
+[tool.setuptools.package-data]
+simulation = ["dashboard.html"]
+
 [project.urls]
-Homepage = "https://github.com/jeremy-cleland/parking-optimization"
-Documentation = "https://github.com/jeremy-cleland/parking-optimization/docs"
-Repository = "https://github.com/jeremy-cleland/parking-optimization.git"
+Homepage = "https://jeremy-cleland.github.io/parking_optimization/"
+Documentation = "https://github.com/Jeremy-Cleland/parking_optimization#readme"
+Repository = "https://github.com/Jeremy-Cleland/parking_optimization.git"
 "Bug Tracker" = "https://github.com/jeremy-cleland/parking-optimization/issues"
 
 # ============================================================================
@@ -83,7 +86,7 @@ Repository = "https://github.com/jeremy-cleland/parking-optimization.git"
 # ============================================================================
 
 [tool.ruff]
-target-version = "py38"
+target-version = "py313"
 line-length = 88
 
 [tool.ruff.lint]
@@ -102,6 +105,9 @@ ignore = [
     "E501", # line too long, handled by formatter
     "B008", # do not perform function calls in argument defaults
     "B006", # do not use mutable default arguments
+    "UP006", # preserve legacy typing style during Python support correction
+    "UP035",
+    "UP045",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -115,7 +121,8 @@ ignore = [
 known-first-party = ["core", "simulation", "analysis"]
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.13"
+exclude = ["^build/", "^dist/", "^\\.venv/"]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -139,6 +146,7 @@ module = [
     "osmnx.*",
     "geopandas.*",
     "rtree.*",
+    "scipy.*",
 ]
 ignore_missing_imports = true
 
@@ -156,6 +164,7 @@ addopts = [
     "--cov-report=xml",
 ]
 testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",

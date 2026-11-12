@@ -1,1192 +1,528 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
     <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Parking Optimization System - CIS 505 Project</title>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Parking Policy Experiments · CIS 505</title>
+        <meta
+            name="description"
+            content="Controlled parking-policy simulations with paired confidence intervals, fresh validation seeds, revenue and access trade-offs, and downloadable evidence."
+        />
+        <link
+            rel="canonical"
+            href="https://jeremy-cleland.github.io/parking_optimization/"
+        />
         <style>
             :root {
-                --bg-primary: #09090b;
-                --bg-secondary: #111113;
-                --bg-tertiary: #1a1a1d;
-                --text-primary: #f8fafc;
-                --text-secondary: #cbd5e1;
-                --text-tertiary: #94a3b8;
-                --accent-primary: #2563eb;
-                --accent-secondary: #1d4ed8;
-                --accent-tertiary: #60a5fa;
-                --border-radius: 15px;
-                --card-radius: 15px;
-                --shadow: 0 4px 16px rgba(23, 23, 23, 0.5);
-                --transition: all 0.3s ease;
-                --border-color: #1e293b;
+                color-scheme: dark;
+                --bg: #09090b;
+                --surface: #111113;
+                --text: #f8fafc;
+                --muted: #cbd5e1;
+                --accent: #60a5fa;
+                --line: #334155;
             }
-
             * {
-                margin: 0;
-                padding: 0;
                 box-sizing: border-box;
             }
-
+            html {
+                scroll-padding-top: 1.5rem;
+            }
             body {
-                font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont,
-                    "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
-                background-color: var(--bg-primary);
-                color: var(--text-primary);
-                line-height: 1.6;
-                padding: 2rem;
-                display: flex;
-                justify-content: center;
+                margin: 0;
+                background: var(--bg);
+                color: var(--text);
+                font:
+                    17px/1.65 -apple-system,
+                    BlinkMacSystemFont,
+                    "Segoe UI",
+                    sans-serif;
             }
-
-            .main-content {
-                padding: 1rem;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                width: 100%;
+            a {
+                color: var(--accent);
+                text-underline-offset: 0.2em;
             }
-
-            /* Make all content sections take full width of container */
-            .content-section,
-            .metrics-grid,
-            .chart-container,
-            .project-image,
-            .image-container {
-                width: 100%;
+            a:hover {
+                color: #bfdbfe;
             }
-
-            header {
-                margin-bottom: 2rem;
-                text-align: center;
+            a:focus-visible {
+                outline: 2px solid var(--accent);
+                outline-offset: 5px;
             }
-
-            h1 {
-                font-size: 2.5rem;
-                font-weight: 700;
-                margin-bottom: 0.5rem;
-                background: linear-gradient(
-                    90deg,
-                    var(--accent-primary),
-                    var(--accent-tertiary)
-                );
-                -webkit-background-clip: text;
-                background-clip: text;
-                color: transparent;
-            }
-
-            .subtitle {
-                color: var(--text-secondary);
-                font-size: 1.2rem;
-                max-width: 800px;
-                margin: 0 auto;
-            }
-
-            .content-section {
-                background-color: var(--bg-secondary);
-                border-radius: var(--card-radius);
-                padding: 2rem;
-                margin-bottom: 2rem;
-                box-shadow: var(--shadow);
-            }
-
-            .section-title {
-                font-size: 1.75rem;
-                margin-bottom: 1rem;
-                color: var(--accent-tertiary);
-            }
-
-            .reports-grid {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 1.5rem;
-                margin-top: 2rem;
-            }
-
-            .report-card {
-                background-color: var(--bg-secondary);
-                border-radius: var(--card-radius);
-                overflow: hidden;
-                box-shadow: var(--shadow);
-                transition: var(--transition);
-            }
-
-            .report-card:hover {
-                transform: translateY(-5px);
-                box-shadow: 0 8px 20px rgba(23, 23, 23, 0.6);
-            }
-
-            .report-header {
-                padding: 1.5rem;
-                background-color: var(--bg-tertiary);
-                border-bottom: 1px solid var(--border-color);
-            }
-
-            .report-title {
-                font-size: 1.25rem;
-                font-weight: 600;
-                margin-bottom: 0.5rem;
-            }
-
-            .report-subtitle {
-                color: var(--text-tertiary);
-                font-size: 0.9rem;
-            }
-
-            .report-body {
-                padding: 1.5rem;
-            }
-
-            .metrics {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 0.75rem;
-                margin-bottom: 1.5rem;
-            }
-
-            .metric {
-                background-color: var(--bg-tertiary);
-                padding: 0.75rem;
-                border-radius: var(--border-radius);
-            }
-
-            .metric-label {
-                font-size: 0.75rem;
-                color: var(--text-tertiary);
-                margin-bottom: 0.25rem;
-            }
-
-            .metric-value {
-                font-size: 1.25rem;
-                font-weight: 600;
-            }
-
-            .report-footer {
-                padding: 1.5rem;
-                border-top: 1px solid var(--border-color);
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-
-            .btn {
-                display: inline-flex;
-                align-items: center;
-                gap: 0.5rem;
-                padding: 0.5rem 1rem;
-                border-radius: var(--border-radius);
-                font-size: 0.875rem;
-                font-weight: 500;
-                cursor: pointer;
-                transition: var(--transition);
-                text-decoration: none;
-                border: none;
-            }
-
-            .btn-primary {
-                background-color: var(--accent-primary);
+            ::selection {
+                background: #1d4ed8;
                 color: white;
             }
-
-            .btn-primary:hover {
-                background-color: var(--accent-primary);
-                opacity: 0.9;
-            }
-
-            .btn-outline {
-                background-color: transparent;
-                border: 1px solid var(--border-color);
-                color: var(--text-secondary);
-            }
-
-            .btn-outline:hover {
-                background-color: rgba(255, 255, 255, 0.05);
-            }
-
-            .github-link {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-top: 2rem;
-                padding: 1rem;
-                background-color: var(--bg-secondary);
-                border-radius: var(--border-radius);
-                text-decoration: none;
-                color: var(--text-primary);
-                gap: 0.5rem;
-                transition: var(--transition);
-            }
-
-            .github-link:hover {
-                background-color: var(--bg-tertiary);
-            }
-
-            .tech-stack {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 0.75rem;
-                margin-top: 1rem;
-            }
-
-            .tech-badge {
-                background-color: var(--bg-tertiary);
-                padding: 0.5rem 0.75rem;
-                border-radius: 20px;
-                font-size: 0.75rem;
-                color: var(--text-tertiary);
-            }
-
-            .image-container {
-                margin: 1.5rem 0;
-                display: flex;
-                justify-content: center;
-            }
-
-            .project-image {
-                max-width: 100%;
-                border-radius: var(--border-radius);
-                box-shadow: var(--shadow);
-            }
-
-            .metrics-grid {
-                display: grid;
-                grid-template-columns: repeat(4, 1fr);
-                gap: 1rem;
-                margin: 1.5rem 0;
-            }
-
-            .chart-container {
-                background-color: var(--bg-tertiary);
-                padding: 1rem;
-                border-radius: var(--border-radius);
-                margin-bottom: 1.5rem;
-            }
-
-            .data-table {
-                width: 100%;
-                border-collapse: collapse;
-                margin: 1.5rem 0;
-            }
-
-            .data-table th,
-            .data-table td {
-                padding: 0.75rem 1rem;
-                text-align: left;
-                border-bottom: 1px solid var(--border-color);
-            }
-
-            .data-table th {
-                background-color: var(--bg-tertiary);
-                color: var(--text-tertiary);
-                font-weight: 500;
-                font-size: 0.875rem;
-            }
-
-            .data-table tbody tr:hover {
-                background-color: rgba(255, 255, 255, 0.03);
-            }
-
-            .progress-container {
-                width: 100%;
-                height: 8px;
-                background-color: var(--bg-tertiary);
-                border-radius: 4px;
-                overflow: hidden;
-                margin-top: 0.5rem;
-            }
-
-            .progress-bar {
-                height: 100%;
-                background: linear-gradient(
-                    90deg,
-                    var(--accent-primary),
-                    var(--accent-tertiary)
-                );
-                border-radius: 4px;
-            }
-
-            .grid-2 {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 1.5rem;
-                margin: 1.5rem 0;
-            }
-
-            .chart-image {
-                width: 100%;
-                border-radius: var(--border-radius);
-            }
-
-            /* Sidebar */
             .sidebar {
                 position: fixed;
-                top: 0;
-                left: 0;
-                width: 250px;
-                height: 100vh;
-                background-color: var(--bg-secondary);
-                border-right: 1px solid var(--border-color);
-                padding: 2rem 0;
-                overflow-y: auto;
-                z-index: 100;
-                transition: var(--transition);
+                inset: 0 auto 0 0;
+                width: 220px;
+                padding: 2.5rem 1.5rem;
+                border-right: 1px solid var(--line);
+                background: var(--surface);
             }
-
-            .sidebar-logo {
-                display: flex;
-                align-items: center;
-                gap: 0.75rem;
-                padding: 0 1.5rem;
+            .sidebar strong {
+                display: block;
+                font-size: 1.4rem;
                 margin-bottom: 2rem;
             }
-
-            .logo-icon {
-                width: 2.5rem;
-                height: 2.5rem;
-                background: linear-gradient(
-                    135deg,
-                    var(--accent-primary),
-                    var(--accent-secondary)
-                );
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-                font-size: 1.25rem;
-            }
-
-            .logo-text {
-                font-size: 1.25rem;
-                font-weight: 600;
-                color: var(--text-primary);
-            }
-
-            .nav-section {
-                margin-bottom: 1.5rem;
-            }
-
-            .nav-heading {
-                text-transform: uppercase;
-                font-size: 0.75rem;
-                color: var(--text-tertiary);
-                padding: 0 1.5rem;
-                margin-bottom: 0.5rem;
-                letter-spacing: 1px;
-            }
-
-            .nav-item {
-                display: flex;
-                align-items: center;
-                padding: 0.75rem 1.5rem;
-                color: var(--text-secondary);
+            .sidebar a {
+                display: block;
+                padding: 0.6rem 0;
                 text-decoration: none;
-                transition: var(--transition);
-                border-left: 3px solid transparent;
             }
-
-            .nav-item:hover {
-                background-color: rgba(255, 255, 255, 0.05);
-                color: var(--text-primary);
+            main {
+                max-width: 1250px;
+                margin-left: 220px;
+                padding: 3rem 4vw 4rem;
             }
-
-            .nav-item.active {
-                background-color: rgba(255, 255, 255, 0.05);
-                border-left: 3px solid var(--accent-primary);
-                color: var(--accent-tertiary);
+            header {
+                padding-bottom: 2rem;
+                border-bottom: 1px solid var(--line);
             }
-
-            .nav-item i {
-                margin-right: 0.75rem;
-                font-size: 1rem;
+            h1 {
+                font-size: clamp(2.1rem, 4.2vw, 3.5rem);
+                line-height: 1.1;
+                letter-spacing: -0.025em;
+                max-width: 20ch;
+                margin: 0.3rem 0 1.5rem;
+                text-wrap: balance;
             }
-
-            .nav-text {
-                font-size: 0.95rem;
-                font-weight: 500;
+            h2 {
+                font-size: 1.8rem;
+                line-height: 1.25;
+                margin: 0 0 1rem;
             }
-
-            /* Main content with sidebar */
-            .with-sidebar {
-                margin-left: 250px;
-                width: calc(100% - 250px);
-                max-width: 1200px;
-                transition: var(--transition);
+            h3 {
+                font-size: 1.2rem;
+                margin: 2rem 0 0.5rem;
             }
-
-            .container {
-                max-width: 1000px;
+            p,
+            li {
+                max-width: 74ch;
+            }
+            p {
+                margin: 0 0 1.2rem;
+                color: var(--muted);
+            }
+            strong {
+                color: var(--text);
+            }
+            section {
+                padding: 3rem 0;
+                border-bottom: 1px solid var(--line);
+            }
+            .intro {
+                font-size: 1.25rem;
+                max-width: 64ch;
+            }
+            .links {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.6rem 1.4rem;
+            }
+            .mobile-nav {
+                display: none;
+            }
+            figure {
+                margin: 2rem 0;
+            }
+            figure img {
+                display: block;
                 width: 100%;
-                padding: 0 2rem;
+                height: auto;
+                border-radius: 12px;
             }
-
-            .data-table-container {
-                overflow-x: auto;
-                margin: 1.5rem 0;
+            figcaption {
+                font-size: 0.9rem;
+                color: var(--muted);
+                margin: 0.8rem 0;
             }
-
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 0.9rem;
+                font-variant-numeric: tabular-nums;
+            }
+            caption {
+                text-align: left;
+                margin-bottom: 1rem;
+                color: var(--muted);
+            }
+            th,
+            td {
+                text-align: left;
+                padding: 1rem 0.65rem;
+                border-bottom: 1px solid var(--line);
+                vertical-align: top;
+            }
+            th {
+                color: var(--accent);
+                font-weight: 600;
+            }
+            td {
+                overflow-wrap: anywhere;
+            }
+            pre {
+                background: var(--surface);
+                border-radius: 12px;
+                padding: 1.2rem;
+                white-space: pre-wrap;
+                overflow-wrap: anywhere;
+                font-size: 0.85rem;
+            }
+            code {
+                font-family: ui-monospace, monospace;
+            }
+            footer {
+                padding-top: 2rem;
+                color: var(--muted);
+                font-size: 0.9rem;
+            }
+            .skip {
+                position: absolute;
+                top: -100px;
+                left: 1rem;
+            }
+            .skip:focus {
+                top: 1rem;
+                background: var(--surface);
+                padding: 1rem;
+                z-index: 5;
+            }
             @media (max-width: 992px) {
-                .sidebar {
-                    transform: translateX(-100%);
-                }
-
-                .with-sidebar {
-                    margin-left: 0;
-                }
-
-                .sidebar-toggle {
-                    display: block;
-                }
-            }
-
-            @media (max-width: 768px) {
-                .reports-grid {
-                    grid-template-columns: 1fr;
-                }
-
-                .metrics-grid {
-                    grid-template-columns: 1fr;
-                }
-
-                .grid-2 {
-                    grid-template-columns: 1fr;
-                }
-                /* Hide sidebar on small screens */
                 .sidebar {
                     display: none;
                 }
-                .with-sidebar {
-                    margin-left: 0;
+                main {
+                    margin: 0;
+                    padding: 2rem 5vw;
+                }
+                .mobile-nav {
+                    display: flex;
+                    margin-bottom: 2rem;
+                    flex-wrap: wrap;
+                    gap: 1rem;
+                }
+                section {
+                    padding: 2.5rem 0;
                 }
             }
-
-            .algorithm-section {
-                margin-bottom: 2rem;
-                background-color: var(--bg-tertiary);
-                border-radius: var(--border-radius);
-                padding: 1.5rem;
-            }
-
-            .algorithm-metrics {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 1rem;
-                margin: 1rem 0;
-            }
-            /* Mobile responsiveness */
-            @media (max-width: 768px) {
-                body {
-                    padding: 1rem;
+            @media (max-width: 640px) {
+                table,
+                tbody,
+                tr,
+                td {
+                    display: block;
                 }
-                .container {
-                    padding: 0 0.5rem;
+                caption {
+                    display: block;
+                    width: 100%;
                 }
-                h1 {
-                    font-size: 2rem;
+                thead {
+                    position: absolute;
+                    width: 1px;
+                    height: 1px;
+                    overflow: hidden;
+                    clip-path: inset(50%);
                 }
-                .subtitle {
-                    font-size: 1rem;
+                tr {
+                    padding: 1rem 0;
+                    border-bottom: 1px solid var(--line);
                 }
-                .section-title {
-                    font-size: 1.5rem;
+                td {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                    gap: 1rem;
+                    padding: 0.5rem 0;
+                    border: 0;
                 }
-                .reports-grid {
-                    grid-template-columns: 1fr;
+                td::before {
+                    content: attr(data-label);
+                    color: var(--muted);
                 }
-                .metrics-grid {
-                    grid-template-columns: 1fr;
+                h2 {
+                    font-size: 1.6rem;
                 }
-                .btn {
-                    font-size: 0.8rem;
-                    padding: 0.5rem;
-                }
-            }
-
-            .feature-list {
-                list-style-type: none;
-                margin: 1rem 0;
-                padding: 0;
-            }
-
-            .feature-list li {
-                margin-bottom: 0.5rem;
-                padding-left: 1.5rem;
-                position: relative;
-            }
-
-            .feature-list li:before {
-                content: "•";
-                position: absolute;
-                left: 0;
-                color: var(--accent-tertiary);
-            }
-
-            .subsection-title {
-                font-size: 1.1rem;
-                color: var(--accent-tertiary);
-                margin: 1.5rem 0 0.75rem;
             }
         </style>
-        <link
-            rel="stylesheet"
-            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-        />
     </head>
     <body>
-        <div class="sidebar">
-            <div class="sidebar-logo">
-                <div class="logo-icon">
-                    <i class="fas fa-parking"></i>
-                </div>
-                <div class="logo-text">ParkingOpt</div>
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-heading">Overview</div>
-                <a href="#introduction" class="nav-item active">
-                    <i class="fas fa-home"></i>
-                    <span class="nav-text">Introduction</span>
-                </a>
-                <a href="#algorithms" class="nav-item">
-                    <i class="fas fa-cogs"></i>
-                    <span class="nav-text">Algorithms</span>
-                </a>
-                <a href="#real-world" class="nav-item">
-                    <i class="fas fa-map-marked-alt"></i>
-                    <span class="nav-text">Real-World Data</span>
-                </a>
-                <a href="#simulation" class="nav-item">
-                    <i class="fas fa-city"></i>
-                    <span class="nav-text">City Simulation</span>
-                </a>
-                <a href="#results" class="nav-item">
-                    <i class="fas fa-chart-bar"></i>
-                    <span class="nav-text">Results</span>
-                </a>
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-heading">Technical Details</div>
-                <a href="#dynamic-pricing" class="nav-item">
-                    <i class="fas fa-dollar-sign"></i>
-                    <span class="nav-text">Dynamic Pricing</span>
-                </a>
-                <a href="#route-optimization" class="nav-item">
-                    <i class="fas fa-route"></i>
-                    <span class="nav-text">A* Routing</span>
-                </a>
-                <a href="#demand-prediction" class="nav-item">
-                    <i class="fas fa-brain"></i>
-                    <span class="nav-text">ML Prediction</span>
-                </a>
-                <a href="#driver-psychology" class="nav-item">
-                    <i class="fas fa-users"></i>
-                    <span class="nav-text">Driver Behavior</span>
-                </a>
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-heading">Academic</div>
-                <a href="#complexity-analysis" class="nav-item">
-                    <i class="fas fa-calculator"></i>
-                    <span class="nav-text">Complexity Analysis</span>
-                </a>
-                <a href="#team" class="nav-item">
-                    <i class="fas fa-graduation-cap"></i>
-                    <span class="nav-text">CIS 505 Team</span>
-                </a>
-            </div>
-
-            <div class="nav-section">
-                <div class="nav-heading">Resources</div>
-                <a href="#quick-start" class="nav-item">
-                    <i class="fas fa-rocket"></i>
-                    <span class="nav-text">Quick Start</span>
-                </a>
-                <a
-                    href="https://github.com/jeremy-cleland/parking-optimization"
-                    class="nav-item"
+        <a class="skip" href="#main">Skip to report</a>
+        <aside class="sidebar">
+            <strong>ParkingOpt</strong>
+            <nav aria-label="Report">
+                <a href="#results">Policy results</a
+                ><a href="#method">Study design</a
+                ><a href="#tool">Try the simulator</a
+                ><a href="#limits">Limits and next work</a
+                ><a href="#team">Project team</a
+                ><a
+                    href="https://github.com/Jeremy-Cleland/parking_optimization"
+                    >Source repository</a
                 >
-                    <i class="fab fa-github"></i>
-                    <span class="nav-text">GitHub</span>
-                </a>
-            </div>
-        </div>
-
-        <div class="container with-sidebar">
+            </nav>
+        </aside>
+        <main id="main">
+            <nav class="mobile-nav" aria-label="Report">
+                <a href="#results">Results</a><a href="#method">Method</a
+                ><a href="#tool">Run it</a><a href="#limits">Limits</a>
+            </nav>
             <header>
-                <h1>Real-Time Parking Optimization System</h1>
-                <p class="subtitle">
-                    Advanced algorithms for urban parking challenges using game
-                    theory, A* pathfinding, ML forecasting, and driver
-                    psychology modeling
+                <h1>Test parking policy before choosing it.</h1>
+                <p class="intro">
+                    A reproducible parking simulator for comparing prices,
+                    routing, driver access, and affordability under the same
+                    demand.
                 </p>
+                <p>
+                    CIS 505 team project · University of Michigan–Dearborn<br />Evaluation
+                    updated 12 November 2026 · Simulation only
+                </p>
+                <div class="links">
+                    <a href="#results">Explore the evidence</a
+                    ><a
+                        href="https://github.com/Jeremy-Cleland/parking_optimization"
+                        >View source and setup</a
+                    >
+                </div>
             </header>
-
-            <!-- Key Metrics Dashboard -->
-            <div class="metrics-grid">
-                <div class="metric">
-                    <div class="metric-label">Zones Analyzed</div>
-                    <div class="metric-value">113</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Response Time</div>
-                    <div class="metric-value">&lt;100ms</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Algorithm Complexity</div>
-                    <div class="metric-value">O(z²)</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Driver Personalities</div>
-                    <div class="metric-value">6 Types</div>
-                </div>
-            </div>
-
-            <!-- Introduction Section -->
-            <section id="introduction" class="content-section">
-                <h2 class="section-title">Introduction</h2>
+            <section id="results">
+                <h2>
+                    Dynamic pricing helps under high demand, with trade-offs.
+                </h2>
                 <p>
-                    This comprehensive parking optimization system addresses
-                    critical urban mobility challenges through advanced
-                    algorithmic solutions. Developed for CIS 505 (Algorithms
-                    Analysis and Design) at the University of Michigan -
-                    Dearborn, the system demonstrates practical applications of
-                    complex algorithms in real-world scenarios.
+                    On ten fresh seeds at high demand, dynamic pricing increases
+                    modeled revenue by 9.2% and parking success by 8.2
+                    percentage points versus static pricing with the same
+                    distance routing. Mean quoted stay cost rises from $6.31 to
+                    $6.91. Lower-demand scenarios improve access at a revenue
+                    cost.
                 </p>
                 <p>
-                    Urban parking inefficiency costs cities billions annually.
-                    Drivers spend an average of 17 minutes searching for
-                    parking, creating traffic congestion, wasted fuel, and
-                    reduced air quality. Our system tackles this challenge
-                    through five interconnected algorithmic approaches:
+                    The comparison below isolates pricing by holding distance
+                    routing constant. Revenue is measured over six hours; stay
+                    cost describes the full quoted stay of successful arrivals.
                 </p>
-                <ul class="feature-list">
-                    <li>
-                        <strong>Dynamic Pricing:</strong> Game theory-based Nash
-                        equilibrium optimization
-                    </li>
-                    <li>
-                        <strong>Smart Routing:</strong> A* pathfinding with
-                        real-time traffic integration
-                    </li>
-                    <li>
-                        <strong>Demand Prediction:</strong> Machine learning
-                        forecasting with historical analysis
-                    </li>
-                    <li>
-                        <strong>City Coordination:</strong> Distributed
-                        optimization using divide-and-conquer
-                    </li>
-                    <li>
-                        <strong>Driver Psychology:</strong> Behavioral modeling
-                        with 6 personality types
-                    </li>
-                </ul>
-                <div class="tech-stack">
-                    <span class="tech-badge">Python 3.8+</span>
-                    <span class="tech-badge">NumPy/SciPy</span>
-                    <span class="tech-badge">Game Theory</span>
-                    <span class="tech-badge">A* Algorithm</span>
-                    <span class="tech-badge">Machine Learning</span>
-                    <span class="tech-badge">Graph Algorithms</span>
-                    <span class="tech-badge">Real-Time APIs</span>
-                </div>
-                <div class="image-container">
-                    <img
-                        src="showcase/latest_run/selected_visuals/summary_dashboard.png"
-                        alt="System Overview Dashboard"
-                        class="project-image"
-                        style="max-width: 900px"
-                    />
-                </div>
-            </section>
-
-            <!-- Algorithms Section -->
-            <section id="algorithms" class="content-section">
-                <h2 class="section-title">Core Algorithms</h2>
-                <p>
-                    The system integrates multiple advanced algorithms, each
-                    mathematically proven and complexity-analyzed for academic
-                    rigor:
-                </p>
-
-                <div id="dynamic-pricing" class="algorithm-section">
-                    <h4 style="color: var(--accent-tertiary)">
-                        Dynamic Pricing Algorithm
-                    </h4>
-                    <div class="algorithm-metrics">
-                        <div class="metric">
-                            <div class="metric-label">Time Complexity</div>
-                            <div class="metric-value">O(z²)</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-label">Space Complexity</div>
-                            <div class="metric-value">O(z)</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-label">Optimization Method</div>
-                            <div class="metric-value">Nash Equilibrium</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-label">Convergence</div>
-                            <div class="metric-value">Guaranteed</div>
-                        </div>
-                    </div>
-                    <p>
-                        Uses game theory to optimize pricing across competing
-                        zones, finding Nash equilibrium points that maximize
-                        both revenue and utilization.
-                    </p>
-                </div>
-
-                <div id="route-optimization" class="algorithm-section">
-                    <h4 style="color: var(--accent-tertiary)">
-                        A* Route Optimization
-                    </h4>
-                    <div class="algorithm-metrics">
-                        <div class="metric">
-                            <div class="metric-label">Time Complexity</div>
-                            <div class="metric-value">O((V+E) log V)</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-label">Space Complexity</div>
-                            <div class="metric-value">O(V+E)</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-label">Heuristic</div>
-                            <div class="metric-value">Traffic-aware</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-label">Optimality</div>
-                            <div class="metric-value">Guaranteed</div>
-                        </div>
-                    </div>
-                    <p>
-                        Implements A* pathfinding with real-time traffic
-                        integration, providing optimal routes while considering
-                        current congestion patterns.
-                    </p>
-                </div>
-
-                <div id="demand-prediction" class="algorithm-section">
-                    <h4 style="color: var(--accent-tertiary)">
-                        ML Demand Prediction
-                    </h4>
-                    <div class="algorithm-metrics">
-                        <div class="metric">
-                            <div class="metric-label">Time Complexity</div>
-                            <div class="metric-value">O(t×s²)</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-label">Space Complexity</div>
-                            <div class="metric-value">O(t×s)</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-label">Method</div>
-                            <div class="metric-value">Dynamic Programming</div>
-                        </div>
-                        <div class="metric">
-                            <div class="metric-label">Accuracy</div>
-                            <div class="metric-value">85%+</div>
-                        </div>
-                    </div>
-                    <p>
-                        Uses dynamic programming with machine learning to
-                        forecast parking demand patterns based on historical
-                        data and real-time events.
-                    </p>
-                </div>
-
-                <div class="image-container">
-                    <img
-                        src="showcase/latest_run/selected_visuals/algorithm_complexity.png"
-                        alt="Algorithm Complexity Analysis"
-                        class="project-image"
-                        style="max-width: 900px"
-                    />
-                </div>
-            </section>
-
-            <!-- Real-World Integration Section -->
-            <section id="real-world" class="content-section">
-                <h2 class="section-title">Real-World Data Integration</h2>
-                <p>
-                    The system validates its algorithms using real Grand Rapids,
-                    Michigan downtown data, demonstrating practical
-                    applicability:
-                </p>
-
-                <div class="metrics-grid">
-                    <div class="metric">
-                        <div class="metric-label">Parking Zones</div>
-                        <div class="metric-value">113</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Road Intersections</div>
-                        <div class="metric-value">58</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">API Integrations</div>
-                        <div class="metric-value">3</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Coverage Area</div>
-                        <div class="metric-value">Downtown</div>
-                    </div>
-                </div>
-
-                <h3 class="subsection-title">Geographic Analysis</h3>
-                <div class="image-container">
-                    <img
-                        src="showcase/latest_run/selected_visuals/geographic_dashboard.png"
-                        alt="Grand Rapids Geographic Analysis"
-                        class="project-image"
-                        style="max-width: 900px"
-                    />
-                </div>
-
-                <h3 class="subsection-title">Network Infrastructure</h3>
-                <div class="image-container">
-                    <img
-                        src="showcase/latest_run/selected_visuals/network_analysis_map.png"
-                        alt="Road Network Analysis"
-                        class="project-image"
-                        style="max-width: 900px"
-                    />
-                </div>
-
-                <h3 class="subsection-title">API Integration</h3>
-                <ul class="feature-list">
-                    <li>
-                        <strong>TomTom API:</strong> Primary traffic data
-                        provider (2,500 calls/day free)
-                    </li>
-                    <li>
-                        <strong>Google Maps API:</strong> Alternative with
-                        $200/month credit
-                    </li>
-                    <li>
-                        <strong>Mapbox API:</strong> Backup service with 100k
-                        requests/month
-                    </li>
-                    <li>
-                        <strong>Offline Mode:</strong> 100% functional without
-                        external APIs
-                    </li>
-                </ul>
-            </section>
-
-            <!-- City Simulation Section -->
-            <section id="simulation" class="content-section">
-                <h2 class="section-title">City Simulation Engine</h2>
-                <p>
-                    Advanced simulation environment with realistic driver
-                    behavior modeling and city-scale optimization:
-                </p>
-
-                <h3 id="driver-psychology" class="subsection-title">
-                    Driver Psychology Model
-                </h3>
-                <p>
-                    Six distinct personality types with realistic
-                    decision-making patterns:
-                </p>
-                <ul class="feature-list">
-                    <li>
-                        <strong>Optimizer:</strong> Minimizes total cost (time +
-                        money)
-                    </li>
-                    <li>
-                        <strong>Satisficer:</strong> Chooses first acceptable
-                        option
-                    </li>
-                    <li>
-                        <strong>Risk-averse:</strong> Prefers guaranteed
-                        availability
-                    </li>
-                    <li>
-                        <strong>Impatient:</strong> Prioritizes shortest walking
-                        distance
-                    </li>
-                    <li>
-                        <strong>Budget-conscious:</strong> Minimizes monetary
-                        cost
-                    </li>
-                    <li>
-                        <strong>Explorer:</strong> Willing to try new parking
-                        areas
-                    </li>
-                </ul>
-
-                <h3 class="subsection-title">Simulation Parameters</h3>
-                <div class="metrics-grid">
-                    <div class="metric">
-                        <div class="metric-label">Drivers Simulated</div>
-                        <div class="metric-value">50-2000</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Time Span</div>
-                        <div class="metric-value">30min-8hrs</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Zone Range</div>
-                        <div class="metric-value">5-100</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Update Frequency</div>
-                        <div class="metric-value">5min intervals</div>
-                    </div>
-                </div>
-
-                <div class="image-container">
-                    <img
-                        src="showcase/latest_run/selected_visuals/performance_metrics.png"
-                        alt="Simulation Performance Metrics"
-                        class="project-image"
-                        style="max-width: 900px"
-                    />
-                </div>
-            </section>
-
-            <!-- Results Section -->
-            <section id="results" class="content-section">
-                <h2 class="section-title">Performance Results</h2>
-                <p>
-                    Comprehensive evaluation demonstrates significant
-                    improvements in parking efficiency and revenue optimization:
-                </p>
-
-                <h3 class="subsection-title">Revenue Analysis</h3>
-                <div class="image-container">
-                    <img
-                        src="showcase/latest_run/selected_visuals/revenue_analysis.png"
-                        alt="Revenue Optimization Results"
-                        class="project-image"
-                        style="max-width: 900px"
-                    />
-                </div>
-
-                <h3 id="complexity-analysis" class="subsection-title">
-                    Algorithm Complexity Validation
-                </h3>
-                <p>
-                    Mathematical verification of theoretical complexity bounds:
-                </p>
-
-                <table class="data-table">
+                <table>
+                    <caption>
+                        Ten fresh validation seeds. Means: static-distance →
+                        dynamic-distance.
+                    </caption>
                     <thead>
                         <tr>
-                            <th>Algorithm</th>
-                            <th>Time Complexity</th>
-                            <th>Space Complexity</th>
-                            <th>Verification Status</th>
+                            <th scope="col">Demand</th>
+                            <th scope="col">Simulated revenue</th>
+                            <th scope="col">Paired revenue effect (95% CI)</th>
+                            <th scope="col">Parked arrivals</th>
+                            <th scope="col">Quoted stay cost</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td>A* Routing</td>
-                            <td>O((V+E) log V)</td>
-                            <td>O(V+E)</td>
-                            <td>✅ Proven</td>
-                        </tr>
-                        <tr>
-                            <td>Dynamic Pricing</td>
-                            <td>O(z²)</td>
-                            <td>O(z)</td>
-                            <td>✅ Benchmarked</td>
-                        </tr>
-                        <tr>
-                            <td>Demand Prediction</td>
-                            <td>O(t×s²)</td>
-                            <td>O(t×s)</td>
-                            <td>✅ Validated</td>
-                        </tr>
-                        <tr>
-                            <td>City Coordination</td>
-                            <td>O(z²/d + d²)</td>
-                            <td>O(z)</td>
-                            <td>✅ Measured</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <h3 class="subsection-title">Key Performance Indicators</h3>
-                <div class="metrics-grid">
-                    <div class="metric">
-                        <div class="metric-label">Search Time Reduction</div>
-                        <div class="metric-value">40%</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Revenue Increase</div>
-                        <div class="metric-value">25%</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Utilization Rate</div>
-                        <div class="metric-value">87%</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Driver Satisfaction</div>
-                        <div class="metric-value">92%</div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Quick Start Section -->
-            <section id="quick-start" class="content-section">
-                <h2 class="section-title">Quick Start Guide</h2>
-                <p>Get the parking optimization system running in minutes:</p>
-
-                <h3 class="subsection-title">Installation</h3>
-                <div
-                    class="chart-container"
-                    style="
-                        background-color: var(--bg-primary);
-                        padding: 1.5rem;
-                        font-family: monospace;
-                    "
-                >
-                    <code style="color: var(--accent-tertiary)"
-                        ># Clone repository</code
-                    ><br />
-                    <code
-                        >git clone
-                        https://github.com/jeremy-cleland/parking-optimization</code
-                    ><br />
-                    <code>cd parking_optimization</code><br /><br />
-                    <code style="color: var(--accent-tertiary)"
-                        ># Setup environment</code
-                    ><br />
-                    <code>make setup</code><br /><br />
-                    <code style="color: var(--accent-tertiary)"
-                        ># Run complete demo</code
-                    ><br />
-                    <code>make run</code>
-                </div>
-
-                <h3 class="subsection-title">Available Commands</h3>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Command</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>make run</code></td>
-                            <td>
-                                Complete simulation with analysis and
-                                visualization
+                            <td data-label="Demand">Low</td>
+                            <td data-label="Revenue: static → dynamic">
+                                $42,386 → $35,722 (-15.7%)
+                            </td>
+                            <td data-label="Paired revenue effect: 95% CI">
+                                $-6,804 to $-6,523
+                            </td>
+                            <td data-label="Parked arrivals: static → dynamic">
+                                71.5% → 77.4%
+                            </td>
+                            <td data-label="Quoted stay cost: static → dynamic">
+                                $6.20 → $4.91
                             </td>
                         </tr>
                         <tr>
-                            <td><code>make simulate</code></td>
-                            <td>City simulation only</td>
+                            <td data-label="Demand">Medium</td>
+                            <td data-label="Revenue: static → dynamic">
+                                $86,589 → $80,870 (-6.6%)
+                            </td>
+                            <td data-label="Paired revenue effect: 95% CI">
+                                $-5,930 to $-5,508
+                            </td>
+                            <td data-label="Parked arrivals: static → dynamic">
+                                65.9% → 73.1%
+                            </td>
+                            <td data-label="Quoted stay cost: static → dynamic">
+                                $6.28 → $5.66
+                            </td>
                         </tr>
                         <tr>
-                            <td><code>make test</code></td>
-                            <td>Run comprehensive test suite</td>
-                        </tr>
-                        <tr>
-                            <td><code>make show-run</code></td>
-                            <td>Display latest simulation results</td>
+                            <td data-label="Demand">High</td>
+                            <td data-label="Revenue: static → dynamic">
+                                $122,263 → $133,526 (+9.2%)
+                            </td>
+                            <td data-label="Paired revenue effect: 95% CI">
+                                $+10,982 to $+11,545
+                            </td>
+                            <td data-label="Parked arrivals: static → dynamic">
+                                58.3% → 66.5%
+                            </td>
+                            <td data-label="Quoted stay cost: static → dynamic">
+                                $6.31 → $6.91
+                            </td>
                         </tr>
                     </tbody>
                 </table>
-
-                <h3 class="subsection-title">Interactive Visualization</h3>
-                <p>
-                    Explore the
-                    <a
-                        href="showcase/latest_run/selected_visuals/interactive_parking_map.html"
-                        style="color: var(--accent-tertiary)"
-                        >interactive parking map</a
+                <figure>
+                    <a href="docs/evaluation/demand_study.png"
+                        ><img
+                            src="docs/evaluation/demand_study.png"
+                            width="2080"
+                            height="1440"
+                            alt="Fresh validation study: dynamic pricing increases simulated parking success at all three demand levels; revenue rises at high demand and falls at low and medium demand."
+                    /></a>
+                    <figcaption>
+                        All four policies, across three demand levels. Means and
+                        95% confidence intervals across ten seeds. Click a chart
+                        for full resolution.
+                    </figcaption>
+                </figure>
+                <figure>
+                    <a href="docs/evaluation/high_demand.png"
+                        ><img
+                            src="docs/evaluation/high_demand.png"
+                            width="2080"
+                            height="1360"
+                            loading="lazy"
+                            alt="High-demand policy means and seed intervals for revenue, occupancy, parking success, and quoted stay cost."
+                    /></a>
+                    <figcaption>
+                        High demand: compare revenue and parking access
+                        alongside the higher quoted stay cost.
+                    </figcaption>
+                </figure>
+                <div class="links">
+                    <a href="docs/evaluation/seed_outcomes.csv" download
+                        >Download seed outcomes (CSV)</a
+                    ><a href="docs/evaluation/evidence.json" download
+                        >Download full evidence (JSON)</a
+                    ><a
+                        href="https://github.com/Jeremy-Cleland/parking_optimization/blob/main/docs/evaluation/README.md"
+                        >Read the complete evaluation</a
                     >
-                    to see real-time optimization in action.
-                </p>
-            </section>
-
-            <!-- Team Section -->
-            <section id="team" class="content-section">
-                <h2 class="section-title">Academic Team</h2>
-                <p>
-                    <strong>Course:</strong> CIS 505 Algorithms Analysis and
-                    Design<br />
-                    <strong>Institution:</strong> University of Michigan -
-                    Dearborn<br />
-                    <strong>Term:</strong> Summer 2025
-                </p>
-
-                <div class="metrics-grid">
-                    <div class="metric">
-                        <div class="metric-label">Jeremy Cleland</div>
-                        <div class="metric-value">Lead Developer</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Saif Khan</div>
-                        <div class="metric-value">Algorithm Analysis</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Asem Zahran</div>
-                        <div class="metric-value">System Architecture</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Project Focus</div>
-                        <div class="metric-value">Urban Algorithms</div>
-                    </div>
                 </div>
-
+            </section>
+            <section id="method">
+                <h2>A controlled comparison, followed by fresh seeds.</h2>
                 <p>
-                    This project demonstrates practical application of advanced
-                    algorithms in real-world urban planning scenarios, with
-                    mathematical validation and complexity analysis suitable for
-                    academic evaluation.
+                    The original five seeds (11–15) and ten fresh seeds (21–30)
+                    are reported separately. The algorithm was frozen before
+                    both sets were run with entry-rate billing. Static and
+                    dynamic prices are crossed with distance and
+                    traffic-weighted routing: 180 policy runs across three
+                    demand levels.
+                </p>
+                <p>
+                    Every policy in a seed receives matching driver and zone
+                    inputs. Each run lasts eight hours; the first two hours are
+                    excluded. There are 113 modeled zones and 17,472 spaces.
+                    Low, medium, and high demand generate 15,389, 32,975, and
+                    50,562 drivers per run. Offered load means arrival rate
+                    times expected stay divided by capacity, rather than an
+                    achieved occupancy target.
+                </p>
+                <p>
+                    Prices are bounded at USD 1–10/hour with a 15% maximum
+                    movement per update. Each driver keeps the hourly rate
+                    accepted on entry. Revenue counts occupied minutes during
+                    measurement and stops at departure or simulation end. Driver
+                    outcomes use arrivals after warm-up and retain unresolved
+                    arrivals.
+                </p>
+                <p>
+                    Effects use paired Student t intervals across identical
+                    seeds. They capture random-seed variability, omit model
+                    uncertainty, and are not adjusted for multiple comparisons.
+                    Full-stay costs are conditional means for successful
+                    drivers; the population can differ between policies.
+                </p>
+                <div class="links">
+                    <a href="docs/evaluation/original_demand_study.png"
+                        >Inspect the original five-seed study</a
+                    ><a href="docs/evaluation/evidence.json"
+                        >Inspect inputs, defaults, hashes, and every policy</a
+                    >
+                </div>
+            </section>
+            <section id="tool">
+                <h2>Run a scenario locally.</h2>
+                <p>
+                    The Python dashboard provides scenario controls, saved
+                    comparison charts, and report downloads. Synthetic scenarios
+                    work offline. Local map files add geographic context; all
+                    controlled studies use simulated traffic.
+                </p>
+                <pre><code># After the pinned setup in the repository README
+.venv/bin/parking-optimize --mode dashboard --port 8765
+# Open http://127.0.0.1:8765
+
+# A capacity-scaled study, with optional Apple GPU computation
+.venv/bin/parking-optimize --mode study --data-source map \
+  --duration 8 --warmup 2 --seeds 21,22,23,24,25,26,27,28,29,30 \
+  --array-backend mlx --workers 4</code></pre>
+                <p>
+                    NumPy is the portable baseline. MLX computes batched walking
+                    distances on Apple silicon; graph searches and driver
+                    decisions remain on the CPU. No whole-system speedup or
+                    concurrent-user claim is implied.
+                </p>
+                <a
+                    href="https://github.com/Jeremy-Cleland/parking_optimization#quick-start"
+                    >Read setup and reproduction instructions</a
+                >
+            </section>
+            <section id="limits">
+                <h2>What this evidence can support.</h2>
+                <p>
+                    The model shows a demand-dependent pricing effect and makes
+                    its trade-offs inspectable. Demand, behavior, destinations,
+                    and price preferences still need field calibration. Many
+                    capacities and rates are estimates or defaults, and original
+                    dataset provenance is incomplete. Exact geographic
+                    reproduction requires the same local input snapshot, which
+                    is not distributed with the report.
+                </p>
+                <p>
+                    The road extract is small and disconnected: 58 nodes, 137
+                    directed edges, and eight strongly connected components.
+                    Time-based routing shows little separation here. Five-minute
+                    decisions constrain search-delay measurements. The study
+                    establishes neither reduced congestion nor field forecast
+                    accuracy, latency guarantees, concurrent-user capacity, or
+                    municipal revenue gains.
+                </p>
+                <p>
+                    The next useful work is observed arrival and stay data, a
+                    larger connected road network, calibrated price responses,
+                    and an explicit revenue, availability, and affordability
+                    objective before a monitored field comparison.
                 </p>
             </section>
-
-            <a
-                href="https://github.com/jeremy-cleland/parking-optimization"
-                class="github-link"
-            >
-                <i class="fab fa-github fa-lg"></i>
-                <span>View on GitHub</span>
-            </a>
-        </div>
-
-        <script>
-            document.addEventListener("DOMContentLoaded", function () {
-                // Add active class to sidebar links when clicked
-                const navItems = document.querySelectorAll(".nav-item");
-                navItems.forEach((item) => {
-                    item.addEventListener("click", function () {
-                        navItems.forEach((i) => i.classList.remove("active"));
-                        this.classList.add("active");
-                    });
-                });
-
-                // Highlight sidebar links based on scroll position
-                const sections = document.querySelectorAll("section[id]");
-                window.addEventListener("scroll", function () {
-                    let current = "";
-                    sections.forEach((section) => {
-                        const sectionTop = section.offsetTop;
-                        const sectionHeight = section.clientHeight;
-                        if (pageYOffset >= sectionTop - 300) {
-                            current = section.getAttribute("id");
-                        }
-                    });
-
-                    navItems.forEach((item) => {
-                        item.classList.remove("active");
-                        if (
-                            item.getAttribute("href").substring(1) === current
-                        ) {
-                            item.classList.add("active");
-                        }
-                    });
-                });
-            });
-        </script>
+            <section id="team">
+                <h2>Built as a team project.</h2>
+                <p>
+                    Jeremy Cleland, Saif Khan, and Asem Zahran.<br />CIS 505
+                    Algorithms Analysis and Design, University of
+                    Michigan–Dearborn, Summer 2025.
+                </p>
+                <div class="links">
+                    <a
+                        href="https://jeremycleland.com/portfolio/parking-optimization"
+                        >Jeremy’s case study</a
+                    ><a
+                        href="https://clelandco.com/showcase/#parking-optimization"
+                        >Cleland &amp; Co. showcase</a
+                    >
+                </div>
+            </section>
+            <footer>
+                MIT-licensed research simulator. Current findings come from the
+                dated evaluation; older coursework images are historical
+                artifacts.
+            </footer>
+        </main>
     </body>
 </html>

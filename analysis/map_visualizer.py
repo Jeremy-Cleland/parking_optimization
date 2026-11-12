@@ -38,7 +38,6 @@ class MapVisualizer:
         self.results_file = results_file
         self.results = None
         self.output_dir = output_dir or "visualization_output"
-        self.map_loader = MapDataLoader()
 
         # Create output directory
         os.makedirs(self.output_dir, exist_ok=True)
@@ -49,6 +48,10 @@ class MapVisualizer:
 
         # Load results and map data
         self._load_results()
+        data_directory = (
+            (self.results or {}).get("simulation_config", {}).get("data_directory")
+        )
+        self.map_loader = MapDataLoader(data_directory)
         self._load_map_data()
 
     def _load_results(self):
@@ -62,12 +65,15 @@ class MapVisualizer:
             self.results = None
 
     def _load_map_data(self):
-        """Load real Grand Rapids map data."""
-        try:
-            self.map_loader.load_all_data()
-            logger.info("Successfully loaded Grand Rapids map data")
-        except Exception as e:
-            logger.error(f"Failed to load map data: {e}")
+        """Require the same validated local dataset as the recorded observations."""
+        if not self.map_loader.load_all_data():
+            raise ValueError("Valid local map data is required to render maps")
+        expected = (self.results or {}).get("data_validation", {}).get("files", {})
+        actual = self.map_loader.validation_report["files"]
+        if expected and expected != actual:
+            raise ValueError(
+                "Map dataset hashes do not match the recorded simulation inputs"
+            )
 
     def create_interactive_parking_map(self) -> str:
         """
@@ -134,7 +140,7 @@ class MapVisualizer:
         meters_group = folium.FeatureGroup(name="Parking Meters")
 
         for zone in zones:
-            # Get occupancy data (mock for now, replace with real data)
+            # Final occupancy comes from saved observations.
             occupancy = self._get_zone_occupancy(zone["id"])
             color = self._get_occupancy_color(occupancy)
 
@@ -176,31 +182,22 @@ class MapVisualizer:
         meters_group.add_to(m)
 
     def _add_traffic_overlay(self, m: folium.Map):
-        """Add traffic data overlay if available."""
-        # This would integrate with your TomTom traffic data
-        # For now, add sample traffic markers on major roads
-        if self.map_loader.road_network:
-            traffic_group = folium.FeatureGroup(name="Traffic Data")
-
-            # Sample some major intersections
-            major_nodes = list(self.map_loader.road_network.nodes())[:20]
-            for node_id in major_nodes:
-                coords = self.map_loader.get_node_coordinates(node_id)
-                # Mock traffic speed (replace with real TomTom data)
-                speed = np.random.uniform(15, 45)
-                color = "green" if speed > 30 else "orange" if speed > 20 else "red"
-
-                folium.CircleMarker(
-                    coords,
-                    radius=4,
-                    popup=f"Traffic Speed: {speed:.1f} km/h",
-                    color="white",
-                    weight=1,
-                    fillColor=color,
-                    fillOpacity=0.7,
-                ).add_to(traffic_group)
-
-            traffic_group.add_to(m)
+        """Render saved edge travel-time ratios; absent observations stay absent."""
+        observations = (self.results or {}).get("traffic_edges", [])
+        if not observations:
+            return
+        group = folium.FeatureGroup(name="Recorded model traffic (final state)")
+        for edge in observations:
+            baseline = edge["base_travel_time_seconds"]
+            ratio = edge["travel_time_seconds"] / baseline if baseline else 1
+            color = "red" if ratio > 1.5 else "orange" if ratio > 1.1 else "green"
+            folium.PolyLine(
+                [edge["origin"], edge["destination"]],
+                color=color,
+                weight=3,
+                tooltip=f"{edge['source']}: {ratio:.2f}x base time; observed {edge.get('observed_at') or 'not observed'}",
+            ).add_to(group)
+        group.add_to(m)
 
     def _add_occupancy_heatmap(self, m: folium.Map, zones: List[Dict]):
         """Add occupancy heatmap overlay."""
@@ -324,7 +321,7 @@ class MapVisualizer:
         """
         fig = plt.figure(figsize=(20, 16))
         fig.suptitle(
-            "Grand Rapids Parking Optimization - Geographic Dashboard",
+            "Grand Rapids Parking - Simulated Geographic Observations",
             fontsize=24,
             color=self.theme_colors["text_color"],
             fontweight="bold",
@@ -371,7 +368,7 @@ class MapVisualizer:
     def _plot_overview_map(self, ax):
         """Plot the main overview map."""
         ax.set_title(
-            "Downtown Grand Rapids - Real-Time Parking Status",
+            "Downtown Grand Rapids - Simulated Final Occupancy",
             fontsize=16,
             color=self.theme_colors["text_color"],
             fontweight="bold",
@@ -405,6 +402,8 @@ class MapVisualizer:
             )
 
         ax.set_aspect("equal")
+        ax.xaxis.label.set_color(self.theme_colors["text_color"])
+        ax.yaxis.label.set_color(self.theme_colors["text_color"])
         ax.set_facecolor(self.theme_colors["background_color"])
         ax.tick_params(colors=self.theme_colors["text_color"])
 
@@ -442,7 +441,7 @@ class MapVisualizer:
 
         ax.boxplot(
             [lot_capacities, meter_capacities],
-            labels=["Lots", "Meters"],
+            tick_labels=["Lots", "Meters"],
             patch_artist=True,
             boxprops={"facecolor": self.theme_colors["main_color"], "alpha": 0.7},
         )
@@ -453,50 +452,53 @@ class MapVisualizer:
         ax.tick_params(colors=self.theme_colors["text_color"])
 
     def _plot_traffic_overview(self, ax):
-        """Plot traffic overview."""
-        ax.set_title(
-            "Traffic Integration",
-            fontsize=14,
-            color=self.theme_colors["text_color"],
-            fontweight="bold",
-        )
-
+        """Describe recorded traffic sources without implying a live provider feed."""
+        config = (self.results or {}).get("simulation_config", {})
+        summary = (self.results or {}).get("traffic_summary", {})
+        text = f"Traffic mode: {config.get('traffic_source', 'unrecorded')}\n"
+        text += f"Provider observations: {summary.get('provider_observations', 0)}\n"
+        text += f"Simulated observations: {summary.get('simulated_observations', 0)}"
         ax.text(
             0.5,
             0.5,
-            "Real-time traffic\nintegration active\n(TomTom API)",
+            text,
             ha="center",
             va="center",
             transform=ax.transAxes,
-            fontsize=12,
             color=self.theme_colors["text_color"],
-            bbox={
-                "boxstyle": "round,pad=0.5",
-                "facecolor": self.theme_colors["grid_color"],
-                "alpha": 0.7,
-            },
         )
-        ax.set_title("Traffic Status", color=self.theme_colors["text_color"])
-
+        ax.set_title("Recorded Traffic Sources", color=self.theme_colors["text_color"])
         ax.set_facecolor(self.theme_colors["background_color"])
         ax.set_xticks([])
         ax.set_yticks([])
 
     def _plot_revenue_by_area(self, ax):
-        """Plot revenue by area."""
-        ax.set_title(
-            "Revenue Analysis",
-            fontsize=14,
-            color=self.theme_colors["text_color"],
-            fontweight="bold",
+        """Aggregate recorded zone revenues by known zone type."""
+        history = (self.results or {}).get("metrics", {}).get("zone_revenue", [])
+        if not history:
+            ax.text(
+                0.5,
+                0.5,
+                "Per-zone revenue was not recorded",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                color=self.theme_colors["text_color"],
+            )
+            ax.axis("off")
+            return
+        totals = {}
+        for zone in self.map_loader.get_parking_zones():
+            totals.setdefault(zone["type"], 0.0)
+            totals[zone["type"]] += sum(step.get(zone["id"], 0) for step in history)
+        ax.bar(
+            list(totals), list(totals.values()), color=self.theme_colors["main_color"]
         )
-
-        areas = ["Downtown Core", "North District", "South District", "East District"]
-        revenues = [1200, 800, 600, 400]
-
-        ax.bar(areas, revenues, color=self.theme_colors["bar_colors"])
-        ax.set_title("Revenue by Area", color=self.theme_colors["text_color"])
-        ax.set_ylabel("Revenue ($)", color=self.theme_colors["text_color"])
+        ax.set_title(
+            "Recorded Revenue by Zone Type", color=self.theme_colors["text_color"]
+        )
+        ax.set_ylabel("Simulated revenue ($)", color=self.theme_colors["text_color"])
+        ax.tick_params(colors=self.theme_colors["text_color"])
 
     def _plot_system_metrics(self, ax):
         """Plot key system metrics."""
@@ -506,19 +508,23 @@ class MapVisualizer:
             success_rate = (
                 metrics.get("successful_parks", 0)
                 / (
-                    metrics.get("successful_parks", 0)
-                    + metrics.get("rejected_drivers", 1)
+                    max(
+                        1,
+                        metrics.get("successful_parks", 0)
+                        + metrics.get("rejected_drivers", 0),
+                    )
                 )
                 * 100
             )
-            avg_search = np.mean(metrics.get("avg_search_time", [0]))
+            search_times = metrics.get("avg_search_time", [])
+            avg_search = float(np.mean(search_times)) if search_times else 0.0
 
             metrics_text = f"""
 System Performance
 ─────────────────
-Revenue: ${total_revenue:.0f}
-Success Rate: {success_rate:.1f}%
-Avg Search: {avg_search:.1f} min
+Revenue: ${total_revenue:.2f}
+Resolved Success: {success_rate:.1f}%
+Successful Search: {avg_search:.1f} min (n={len(search_times)})
 Zones Active: {len(self.map_loader.get_parking_zones())}
             """
         else:
@@ -538,11 +544,16 @@ Zones Active: {len(self.map_loader.get_parking_zones())}
         ax.axis("off")
 
     def _get_zone_occupancy(self, zone_id: str) -> float:
-        """Get current occupancy for a zone (mock data for now)."""
-        # In a real implementation, this would fetch from simulation results
-        # For now, return realistic random occupancy
-        np.random.seed(hash(zone_id) % 2**32)  # Consistent per zone
-        return np.random.beta(2, 3)  # Skewed toward lower occupancy
+        """Use final recorded occupancy; never fabricate missing observations."""
+        for zone in (
+            (self.results or {}).get("final_state", {}).get("zone_occupancy", [])
+        ):
+            if zone["id"] == zone_id:
+                return zone["occupied"] / zone["capacity"]
+        history = (self.results or {}).get("metrics", {}).get("zone_occupancy", [])
+        if history and zone_id in history[-1]:
+            return history[-1][zone_id]
+        raise ValueError(f"No recorded occupancy for zone {zone_id}")
 
     def _get_occupancy_color(self, occupancy: float) -> str:
         """Get Folium color name based on occupancy level."""
@@ -573,6 +584,7 @@ Zones Active: {len(self.map_loader.get_parking_zones())}
 
 def create_all_map_visualizations(
     results_file: str = "output/results.json",
+    output_dir: Optional[str] = None,
 ) -> List[str]:
     """
     Create all map visualizations and return list of generated files.
@@ -583,7 +595,7 @@ def create_all_map_visualizations(
     Returns:
         List of generated file paths
     """
-    visualizer = MapVisualizer(results_file)
+    visualizer = MapVisualizer(results_file, output_dir=output_dir)
     generated_files = []
 
     try:

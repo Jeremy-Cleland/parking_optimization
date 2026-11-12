@@ -27,11 +27,11 @@ class ParkingSpot:
     occupied_since: datetime = None
     spot_type: str = "standard"  # standard, handicap, ev_charging
 
-    def occupy(self, vehicle_id: str):
+    def occupy(self, vehicle_id: str, current_time: Optional[datetime] = None):
         """Mark spot as occupied"""
         self.is_occupied = True
         self.vehicle_id = vehicle_id
-        self.occupied_since = datetime.now()
+        self.occupied_since = current_time or datetime.now()
 
     def release(self):
         """Mark spot as available"""
@@ -147,9 +147,11 @@ class ParkingZone:
 
     def has_availability(self) -> bool:
         """Check if zone has available spots"""
-        return len(self.available_spots) > 0
+        return any(not spot.is_occupied for spot in self.spots)
 
-    def occupy_spot(self, vehicle_id: Optional[str] = None) -> bool:
+    def occupy_spot(
+        self, vehicle_id: Optional[str] = None, current_time: Optional[datetime] = None
+    ) -> bool:
         """
         Occupy a spot in this zone.
 
@@ -159,13 +161,13 @@ class ParkingZone:
         Returns:
             True if spot was successfully occupied, False if no spots available
         """
-        available = self.available_spots
-        if not available:
+        spot = next((spot for spot in self.spots if not spot.is_occupied), None)
+        if spot is None:
             return False
-
-        # Occupy the first available spot
-        spot = available[0]
-        spot.occupy(vehicle_id or f"vehicle_{datetime.now().timestamp()}")
+        spot.occupy(
+            vehicle_id or f"vehicle_{datetime.now().timestamp()}",
+            current_time=current_time,
+        )
         return True
 
     def release_spot(self, vehicle_id: Optional[str] = None) -> bool:

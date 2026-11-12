@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Parking policy experiments</title>
+<style>
+:root{color-scheme:dark;--bg:#09090b;--surface:#111113;--line:#334155;--text:#f8fafc;--muted:#cbd5e1;--blue:#60a5fa;--button:#1d4ed8}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}::selection{background:#1d4ed8;color:white}a{color:var(--blue);text-underline-offset:3px}input,select,button{font:inherit;caret-color:var(--blue)}:focus-visible{outline:3px solid var(--blue);outline-offset:3px}header{padding:28px 40px;border-bottom:1px solid var(--line)}h1{font-size:28px;line-height:1.2;margin:0 0 8px}h2{font-size:20px;margin:0 0 16px}p{max-width:72ch;color:var(--muted);margin:8px 0}main{display:grid;grid-template-columns:340px minmax(0,1fr);min-height:85vh}aside{padding:28px 32px;border-right:1px solid var(--line);background:var(--surface)}section{padding:28px 40px;min-width:0}fieldset{margin:0 0 24px;padding:0;border:0}legend{font-weight:650;margin:0 0 12px}label{display:block;font-size:14px;color:var(--muted);margin:0 0 12px}input,select{display:block;width:100%;margin-top:5px;padding:8px 10px;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:5px}input:hover,select:hover{border-color:var(--blue)}.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}.hint{font-size:13px;color:var(--muted)}button{border:0;border-radius:5px;padding:12px 16px;color:white;background:var(--button);font-weight:650;cursor:pointer;width:100%}button:hover{background:#2563eb}button:disabled{opacity:.6;cursor:wait}#status{min-height:48px;margin-top:14px}#status.error{color:#fca5a5}.empty{padding:40px 0;max-width:68ch}.empty ol{padding-left:22px;color:var(--muted)}.empty li{margin:14px 0}.table-wrap{padding:8px 0;overflow:auto;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:24px 0}table{width:100%;border-collapse:collapse;text-align:left;font-size:14px;font-variant-numeric:tabular-nums}th,td{padding:14px 12px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:500}td small{display:block;color:var(--muted)}th:first-child,td:first-child{padding-left:0}caption{text-align:left;font-size:17px;font-weight:650;padding:16px 0}.downloads{display:flex;gap:20px;flex-wrap:wrap;margin:16px 0 32px}.chart{margin:24px 0 32px}.chart img{display:block;width:100%;height:auto}.chart figcaption{margin-top:10px;color:var(--muted);font-size:14px}.definition{margin-top:24px}details{margin:22px 0}summary{cursor:pointer;color:var(--blue)}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;background:var(--surface);padding:16px}.changed{color:#93c5fd}#results[hidden],#empty[hidden]{display:none}@media(max-width:900px){main{grid-template-columns:280px minmax(0,1fr)}aside,section{padding:24px}}@media(max-width:700px){header{padding:24px}main{display:block}aside{border-right:0;border-bottom:1px solid var(--line)}section{padding:24px}h1{font-size:25px}.pair{gap:16px}}
+</style>
+</head>
+<body>
+<header><h1>Parking policy experiments</h1><p>Test pricing and routing under the same simulated demand. Compare revenue, availability, and driver cost before choosing a policy.</p></header>
+<main>
+<aside><form id="scenario"><h2>Configure a synthetic scenario</h2>
+<fieldset><legend>Demand</legend>
+<label>Arrival pattern<select name="scenario_event"><option value="normal">Normal arrivals</option><option value="event">Event surge</option><option value="steady">Steady arrivals</option></select></label>
+<div class="pair"><label>Parking zones<input name="n_zones" type="number" min="1" max="100" value="8" required></label><label>Drivers<input name="n_drivers" type="number" min="0" max="2000" value="100" required></label></div>
+<label>Demand multiplier<input name="demand_multiplier" type="number" min="0.1" max="3" step="0.1" value="1" required></label>
+<div class="pair"><label>Duration (hours)<input name="duration_hours" type="number" min="0.1" max="12" step="0.1" value="2" required></label><label>Step (minutes)<input name="time_step_minutes" type="number" min="1" max="60" value="5" required></label></div>
+<div class="pair"><label>Warm-up (hours)<input name="warmup_hours" type="number" min="0" max="11" step="0.5" value="0" required></label><label>Array backend<select name="array_backend"><option value="auto">Auto</option><option value="numpy">NumPy / CPU</option><option value="mlx">MLX / Apple GPU</option></select></label></div>
+<label>Scenario start<input name="start_time" type="datetime-local" value="2026-11-12T08:00" required></label>
+<label>Scenario seeds<input name="seeds" value="1,2,3,4,5" pattern="[0-9]+(,[0-9]+)+" aria-describedby="seed-help" required></label><p class="hint" id="seed-help">Use 2–20 distinct seeds, separated by commas.</p>
+</fieldset>
+<fieldset><legend>Pricing constraints</legend><div class="pair"><label>Minimum ($/hour)<input name="min_price" type="number" min="0.1" step="0.1" value="1" required></label><label>Maximum ($/hour)<input name="max_price" type="number" min="0.2" step="0.1" value="10" required></label></div>
+<label>Occupancy target (fraction)<input name="target_occupancy" type="number" min="0.01" max="0.99" step="0.01" value="0.85" required></label>
+<label>Maximum price change per step<input name="max_price_change" type="number" min="0.01" max="1" step="0.01" value="0.15" required></label></fieldset>
+<button id="run" type="submit">Compare four policies</button><p class="hint" id="status" role="status" aria-live="polite">Offline synthetic roads and traffic. No provider calls.</p>
+</form></aside>
+<section aria-labelledby="comparison-heading"><h2 id="comparison-heading">Policy comparison</h2>
+<div class="empty" id="empty"><p>One scenario, four policies, identical seeds.</p><ol><li><strong>Static + distance:</strong> fixed prices and shortest driving paths. This is the baseline.</li><li><strong>Dynamic + distance:</strong> change prices using occupancy and demand forecasts.</li><li><strong>Static + time:</strong> fixed prices and paths using simulated traffic delays.</li><li><strong>Dynamic + time:</strong> combine pricing changes with travel-time routing.</li></ol><p>Run a comparison to see recorded outcomes and uncertainty. All results are simulations; demand and behavior have not been calibrated to field observations.</p></div>
+<div id="results" hidden><p id="receipt"></p><p class="hint" id="result-scenario"></p><p id="stale" class="changed" hidden>Scenario controls have changed. Run another comparison to update these results.</p>
+<div class="downloads"><a id="report-download" download>Download decision report</a><a id="json-download" download>Download evidence JSON</a><a id="csv-download" download>Download seed outcomes</a><a id="chart-download" download>Download comparison chart</a><a id="study-download" target="_blank" hidden>Open full-size demand study</a></div>
+<figure class="chart" id="study-figure" hidden><div id="study-chart"></div><figcaption>Low, medium and high offered-demand scenarios, with the warm-up excluded. These are simulated outcomes.</figcaption></figure>
+<figure class="chart"><div id="policy-chart"></div><figcaption>Recorded policy means and uncertainty across scenario seeds. Blue represents static pricing; green represents dynamic pricing.</figcaption></figure>
+<div class="table-wrap"><table><caption>Means across scenario seeds</caption><thead><tr><th scope="col">Outcome</th><th scope="col">Static + distance</th><th scope="col">Dynamic + distance</th><th scope="col">Static + time</th><th scope="col">Dynamic + time</th></tr></thead><tbody id="outcomes"></tbody></table></div>
+<div class="table-wrap"><table><caption>Paired differences from static + distance</caption><thead><tr><th scope="col">Outcome</th><th scope="col">Dynamic + distance</th><th scope="col">Static + time</th><th scope="col">Dynamic + time</th></tr></thead><tbody id="differences"></tbody></table></div>
+<p class="definition">Each estimate includes a 95% confidence interval across seeds. A paired difference whose interval contains zero is inconclusive. Driver outcomes describe arrivals after the warm-up; occupancy and revenue exclude the warm-up. Intervals describe simulation sampling; they do not account for uncertainty in the demand or behavior model. No single metric defines the best policy.</p>
+<p class="hint">Search, drive, walk, and stay-cost averages describe successful drivers only. Policies may serve different driver populations. Driving time is recorded separately from simulated search delay. Walking distance is a straight-line estimate; accessibility of the pedestrian route is unverified.</p>
+<details><summary>Inspect the scenario and evidence</summary><pre id="evidence"></pre></details>
+</div></section></main>
+<script>
+const form = document.querySelector('#scenario');
+const status = document.querySelector('#status');
+const run = document.querySelector('#run');
+let hasResults = false;
+let controlsChanged = false;
+const names = {revenue:'Occupied-space revenue ($)',mean_occupancy:'Occupied capacity (fraction)',peak_occupancy:'Peak interval occupancy (fraction)',success_rate:'Parked / measured arrivals',rejected:'Rejected drivers',unresolved:'Unresolved drivers',search_minutes:'Successful-driver search (min)',driving_minutes:'Recommended drive (min)',walking_meters:'Estimated walk (m)',mean_stay_cost:'Quoted full stay ($)',mean_hourly_price:'Posted price ($/hour)',target_occupancy_error:'Gap from occupancy target'};
+const fmt = n => Number(n).toLocaleString(undefined, {maximumFractionDigits:3});
+function cell(estimate, paired=false) {
+  const td = document.createElement('td');
+  if (!estimate || estimate.mean === null) { td.textContent='No observations'; return td; }
+  td.append(fmt(estimate.mean));
+  const small = document.createElement('small');
+  small.textContent = estimate.ci95 ? `95% CI [${estimate.ci95.map(fmt).join(', ')}] · n=${estimate.n}` : 'CI unavailable';
+  td.append(small);
+  if (paired && estimate.ci95) {
+    const note = document.createElement('small');
+    note.textContent = estimate.ci95[0]<=0 && estimate.ci95[1]>=0 ? 'Inconclusive' : 'Interval excludes zero';
+    td.append(note);
+  }
+  return td;
+}
+function showTable(target, report, paired) {
+  target.replaceChildren();
+  for (const key of Object.keys(names)) {
+    const row = document.createElement('tr');
+    const label = document.createElement('th');
+    label.scope='row'; label.textContent=names[key]; row.append(label);
+    for (const policy of report.config.policies.slice(paired ? 1 : 0)) {
+      row.append(cell(report.summary[policy][paired ? 'paired_difference_from_baseline' : 'metrics'][key], paired));
+    }
+    target.append(row);
+  }
+}
+function showReport(data, restoreControls=false) {
+  const report = data.report;
+  // A previously saved CLI comparison may contain fewer than the four defaults.
+  for (const [selector, paired] of [['#outcomes', false], ['#differences', true]]) {
+    const table = document.querySelector(selector).closest('table');
+    const header = table.tHead.rows[0];
+    while (header.cells.length > 1) header.deleteCell(1);
+    for (const policy of report.config.policies.slice(paired ? 1 : 0)) {
+      const th = document.createElement('th'); th.scope='col';
+      th.textContent=policy.replace('-', ' + '); header.append(th);
+    }
+    showTable(document.querySelector(selector), report, paired);
+  }
+  document.querySelector('#differences').closest('table').caption.textContent='Paired differences from '+report.baseline.replace('-', ' + ');
+  if (restoreControls && report.config.data_source!=='map' && report.config.offered_load==null) {
+    for (const input of form.querySelectorAll('input,select')) {
+      const value = report.config[input.name];
+      if (value !== undefined) input.value = input.name==='seeds' ? value.join(',') : input.name==='start_time' ? value.slice(0,16) : value;
+    }
+  }
+  document.querySelector('#receipt').textContent = `Simulated experiment ${report.experiment_id} · ${report.config.seeds.length} seeds per policy`;
+  const capacities = [...new Set(report.runs.map(row=>row.outcomes.capacity).filter(value=>value!==undefined))];
+  const generated = [...new Set(report.runs.map(row=>row.outcomes.generated_drivers).filter(value=>value!==undefined))];
+  const capacityText = capacities.length===1 ? `${capacities[0].toLocaleString()} modeled spaces` : 'capacity varies by seed';
+  const driverText = generated.length===1 ? `${generated[0].toLocaleString()} total arrivals per seed` : `${report.config.n_drivers} configured drivers`;
+  document.querySelector('#result-scenario').textContent = `${report.config.data_source==='map' ? 'Local map dataset' : report.config.n_zones+' zones'} · ${capacityText} · ${driverText} · ${report.config.duration_hours} hours · ${report.config.warmup_hours || 0}-hour warm-up excluded`;
+  const hasStudy = report.config.offered_load != null;
+  document.querySelector('#study-figure').hidden=!hasStudy;
+  document.querySelector('#study-download').hidden=!hasStudy;
+  if (hasStudy) {
+    const studyImage=document.createElement('img');
+    studyImage.alt='Demand study comparing revenue, mean occupancy, peak occupancy, and parking success across low, medium and high offered demand.';
+    studyImage.src=data.artifact_base+'/demand_study.png';
+    document.querySelector('#study-chart').replaceChildren(studyImage);
+    document.querySelector('#study-download').href=studyImage.src;
+  }
+  document.querySelector('#evidence').textContent = JSON.stringify({config:report.config,software:report.software,source_sha256:report.source_sha256,runs:report.runs}, null, 2);
+  for (const [id,file] of [['report-download','report.md'],['json-download','experiment.json'],['csv-download','seed_outcomes.csv'],['chart-download','policy_comparison.png']]) {
+    document.querySelector('#'+id).href=data.artifact_base+'/'+file;
+  }
+  const chart = document.createElement('img');
+  chart.alt='Policy means and 95% confidence intervals for revenue, occupied capacity, drivers who parked, and quoted stay cost. Exact values are in the tables below.';
+  chart.src=data.artifact_base+'/policy_comparison.png';
+  document.querySelector('#policy-chart').replaceChildren(chart);
+  document.querySelector('#empty').hidden=true;
+  document.querySelector('#results').hidden=false;
+  document.querySelector('#stale').hidden=false;
+  hasResults=true;
+}
+form.addEventListener('input', () => {
+  controlsChanged=true;
+  if (hasResults) {
+    document.querySelector('#stale').textContent='Scenario controls have changed. Run another comparison to update these results.';
+    document.querySelector('#stale').hidden=false;
+  }
+});
+form.addEventListener('submit', async event => {
+  event.preventDefault(); if (!form.reportValidity()) return;
+  const payload = {};
+  for (const [key,value] of new FormData(form)) {
+    payload[key] = key==='seeds' ? value.split(',').map(Number) : ['scenario_event','start_time','array_backend'].includes(key) ? value : Number(value);
+  }
+  run.disabled=true; form.setAttribute('aria-busy','true');
+  form.querySelectorAll('input,select').forEach(control => control.disabled=true);
+  status.className='hint'; status.textContent=`Running ${payload.seeds.length*4} simulations. Keep this tab open.`;
+  try {
+    const response = await fetch('/compare', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'The comparison could not finish.');
+    showReport(data);
+    document.querySelector('#stale').hidden=true;
+    status.textContent='Comparison complete. Charts and evidence are saved locally.';
+  } catch (error) {
+    status.className='hint error'; status.textContent=error.message+' Adjust the scenario and try again.';
+  } finally {
+    run.disabled=false; form.removeAttribute('aria-busy');
+    form.querySelectorAll('input,select').forEach(control => control.disabled=false);
+  }
+});
+fetch('/latest').then(response => response.json()).then(data => {
+  if (data && !form.hasAttribute('aria-busy') && !hasResults) {
+    showReport(data, !controlsChanged);
+    document.querySelector('#stale').textContent='Showing a saved comparison. Controls configure a new synthetic scenario.';
+    status.textContent='Loaded the latest saved comparison. Adjust the scenario to run another.';
+  }
+}).catch(() => { status.textContent='No saved chart could be loaded. Run a comparison to generate one.'; });
+</script>
+</body></html>

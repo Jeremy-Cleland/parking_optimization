@@ -7,6 +7,7 @@ The system works out-of-the-box with intelligent traffic simulation:
 ```python
 # No APIs needed - uses realistic traffic patterns
 from core.traffic_manager import TrafficManager
+
 traffic_manager = TrafficManager()  # Uses fallback by default
 ```
 

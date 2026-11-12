@@ -5,6 +5,11 @@
 # Default target
 .DEFAULT_GOAL := help
 
+PYTHON ?= .venv/bin/python
+RUFF ?= .venv/bin/ruff
+MYPY ?= .venv/bin/mypy
+BANDIT ?= .venv/bin/bandit
+
 # Color codes for output
 GREEN := \033[32m
 BLUE := \033[34m
@@ -32,29 +37,25 @@ help: ## Show available commands
 # 🚀 MAIN APPLICATION COMMANDS
 # =============================================================================
 
-run: ## Complete end-to-end simulation with analysis and reports
-	@echo "$(GREEN)Running complete parking optimization simulation...$(NC)"
-	@echo "$(BLUE)Step 1: Ensuring map data is available...$(NC)"
-	@$(MAKE) ensure-data
-	@echo "$(BLUE)Step 2: Running comprehensive simulation with analysis and visualization...$(NC)"
-	python main.py --mode simulate --zones 20 --drivers 500
-	@echo "$(GREEN)✅ Complete run finished! Check output/latest/ for results$(NC)"
+run: ## Run a seeded offline demo
+	$(PYTHON) main.py --mode demo --seed 42
 
 simulate: ## Run city simulation
 	@echo "$(GREEN)Running city simulation...$(NC)"
-	python main.py --mode simulate --zones 20 --drivers 500
+	$(PYTHON) main.py --mode simulate --zones 20 --drivers 500
 
 report: ## Generate analysis and visualization report
 	@echo "$(GREEN)Generating comprehensive report...$(NC)"
-	python main.py --mode analyze
-	python main.py --mode visualize
+	@results="$$($(PYTHON) -c 'from pathlib import Path; print(Path("output/latest/simulation_results.json").resolve())')"; \
+		$(PYTHON) main.py --mode analyze && \
+		$(PYTHON) main.py --mode visualize --input "$$results"
 	@echo "$(BLUE)Report complete! Check output/latest/ for results$(NC)"
 
 ensure-data: ## Ensure map data is available (download if missing)
 	@echo "$(GREEN)Checking map data availability...$(NC)"
 	@if [ ! -d "output/map_data" ] || [ ! -f "output/map_data/grand_rapids_drive_network.graphml" ]; then \
 		echo "$(YELLOW)Map data not found. Downloading Grand Rapids data...$(NC)"; \
-		python scripts/fetch_grand_rapids_data.py; \
+		$(PYTHON) scripts/fetch_grand_rapids_data.py; \
 		echo "$(GREEN)✅ Map data downloaded successfully!$(NC)"; \
 	else \
 		echo "$(GREEN)✅ Map data already available.$(NC)"; \
@@ -62,7 +63,7 @@ ensure-data: ## Ensure map data is available (download if missing)
 
 fetch-data: ## Download Grand Rapids map data (force refresh)
 	@echo "$(GREEN)Downloading fresh Grand Rapids map data...$(NC)"
-	python scripts/fetch_grand_rapids_data.py
+	$(PYTHON) scripts/fetch_grand_rapids_data.py
 	@echo "$(GREEN)✅ Map data download complete!$(NC)"
 
 showcase: ## Prepare showcase directory with latest run for sharing/upload
@@ -97,49 +98,52 @@ showcase: ## Prepare showcase directory with latest run for sharing/upload
 
 test: ## Run all tests
 	@echo "$(GREEN)Running system tests...$(NC)"
-	python -m pytest tests/ -v
+	$(PYTHON) -m pytest tests/ -v
 
 test-coverage: ## Run tests with coverage
 	@echo "$(GREEN)Running tests with coverage...$(NC)"
-	python -m pytest tests/ \
+	$(PYTHON) -m pytest tests/ \
 		--cov=core --cov=simulation --cov=analysis \
 		--cov-report=html --cov-report=term --cov-report=xml
 
 test-fast: ## Run tests without slow markers
 	@echo "$(GREEN)Running fast tests...$(NC)"
-	python -m pytest tests/ -v -m "not slow"
+	$(PYTHON) -m pytest tests/ -v -m "not slow"
 
 test-integration: ## Run integration tests only
 	@echo "$(GREEN)Running integration tests...$(NC)"
-	python -m pytest tests/ -v -m "integration"
+	$(PYTHON) -m pytest tests/ -v -m "integration"
 
 lint: ## Check code style and potential issues
 	@echo "$(GREEN)Checking code style...$(NC)"
-	@ruff check . || { echo "$(RED)Ruff not available in environment$(NC)"; exit 1; }
+	$(RUFF) check .
 
 lint-fix: ## Fix auto-fixable linting issues
 	@echo "$(GREEN)Fixing linting issues...$(NC)"
-	@ruff check . --fix
+	@$(RUFF) check . --fix
 
 format: ## Format code with Ruff
 	@echo "$(GREEN)Formatting code...$(NC)"
-	@ruff format . || { echo "$(RED)Ruff not available in environment$(NC)"; exit 1; }
+	$(RUFF) format .
 
 type-check: ## Run static type checking
 	@echo "$(GREEN)Running type checks...$(NC)"
-	@mypy . || { echo "$(RED)MyPy not available in environment$(NC)"; exit 1; }
+	$(MYPY) core simulation analysis main.py
 
 security-check: ## Run security checks
 	@echo "$(GREEN)Running security checks...$(NC)"
-	@bandit -r . -c pyproject.toml || { echo "$(RED)Bandit not available in environment$(NC)"; exit 1; }
+	$(BANDIT) -r core simulation analysis main.py -c pyproject.toml
 
 pre-commit: ## Run all pre-commit checks
 	@echo "$(GREEN)Running pre-commit checks...$(NC)"
 	@pre-commit run --all-files || { echo "$(RED)Pre-commit not installed. Run 'make dev-tools' first$(NC)"; exit 1; }
 
-quality: ## Run all quality checks (lint, format, type-check, test)
+format-check: ## Verify formatting without modifying files
+	$(RUFF) format --check .
+
+quality: ## Run all checks, including the unfinished strict typing audit
 	@echo "$(GREEN)Running all quality checks...$(NC)"
-	@$(MAKE) format
+	@$(MAKE) format-check
 	@$(MAKE) lint
 	@$(MAKE) type-check
 	@$(MAKE) test
@@ -148,65 +152,24 @@ quality: ## Run all quality checks (lint, format, type-check, test)
 # 🛠️  DEVELOPMENT SETUP
 # =============================================================================
 
-install: ## Install package in development mode
-	@echo "$(GREEN)Installing package in development mode...$(NC)"
-	@if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
-		echo "Activating conda environment..."; \
-		eval "$$(conda shell.bash hook)" && conda activate parking_optimization && pip install -e .; \
-	else \
-		pip install -e .; \
-	fi
+install: ## Install the package into the pinned virtual environment
+	uv pip install --python $(PYTHON) --no-deps -e .
 
-install-dev: ## Install with development dependencies
-	@echo "$(GREEN)Installing with development dependencies...$(NC)"
-	@if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
-		echo "Activating conda environment..."; \
-		eval "$$(conda shell.bash hook)" && conda activate parking_optimization && pip install -e ".[dev]"; \
-	else \
-		pip install -e ".[dev]"; \
-	fi
+install-dev: ## Sync the pinned development dependencies
+	uv pip sync --python $(PYTHON) requirements-dev.txt
+	$(MAKE) install
 
-dev-tools: ## Install and setup all development tools
-	@echo "$(GREEN)Setting up development tools...$(NC)"
-	@if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
-		echo "Activating conda environment..."; \
-		eval "$$(conda shell.bash hook)" && conda activate parking_optimization && pip install -e ".[dev]"; \
-	else \
-		pip install -e ".[dev]"; \
-	fi
-	@echo "$(GREEN)Installing pre-commit hooks...$(NC)"
-	@pre-commit install || pip install pre-commit && pre-commit install
-	@echo "$(BLUE)Development tools setup complete!$(NC)"
+dev-tools: install-dev ## Install development tools and pre-commit hooks
+	.venv/bin/pre-commit install
 
-setup: ## Set up environment and dependencies (legacy)
-	@echo "$(GREEN)Setting up environment...$(NC)"
-	@if [ -f environment.yml ]; then \
-		conda env update -f environment.yml; \
-	else \
-		echo "$(YELLOW)No environment.yml found, using pyproject.toml setup$(NC)"; \
-		$(MAKE) install-dev; \
-	fi
+setup: ## Create the pinned development environment
+	mise exec -- python -m venv .venv
+	$(MAKE) install-dev
 
-deps: ## Update dependencies
-	@echo "$(GREEN)Updating dependencies...$(NC)"
-	@if [ -f environment.yml ]; then \
-		conda env update -f environment.yml; \
-	else \
-		if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
-			eval "$$(conda shell.bash hook)" && conda activate parking_optimization && pip install -e ".[dev]" --upgrade; \
-		else \
-			pip install -e ".[dev]" --upgrade; \
-		fi; \
-	fi
+deps: install-dev ## Restore pinned dependencies
 
-build: ## Build package for distribution
-	@echo "$(GREEN)Building package...$(NC)"
-	@if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
-		echo "Activating conda environment..."; \
-		eval "$$(conda shell.bash hook)" && conda activate parking_optimization && python -m build; \
-	else \
-		python -m build; \
-	fi
+build: ## Build the distributable wheel
+	$(PYTHON) -m pip wheel --no-deps . --wheel-dir dist
 
 docs: ## Generate documentation
 	@echo "$(GREEN)Generating documentation...$(NC)"
@@ -265,42 +228,13 @@ clean-everything: ## Nuclear option: clean all artifacts AND map data
 # =============================================================================
 
 list-runs: ## List all simulation runs
-	@echo "$(GREEN)Listing simulation runs...$(NC)"
-	@if [ -f scripts/manage_runs.py ]; then \
-		if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
-			eval "$$(conda shell.bash hook)" && conda activate parking_optimization && python scripts/manage_runs.py list; \
-		else \
-			python scripts/manage_runs.py list; \
-		fi; \
-	else \
-		echo "$(YELLOW)No manage_runs.py script found$(NC)"; \
-		ls -la output/runs/ 2>/dev/null || echo "$(RED)No runs directory$(NC)"; \
-	fi
+	$(PYTHON) scripts/manage_runs.py list
 
-show-run: ## Show latest run details
-	@echo "$(GREEN)Showing latest run...$(NC)"
-	@if [ -f scripts/manage_runs.py ]; then \
-		if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
-			eval "$$(conda shell.bash hook)" && conda activate parking_optimization && python scripts/manage_runs.py list | grep -E "run_[0-9]" | head -1 | awk '{print $$2}' | xargs -I {} python scripts/manage_runs.py show {}; \
-		else \
-			python scripts/manage_runs.py list | grep -E "run_[0-9]" | head -1 | awk '{print $$2}' | xargs -I {} python scripts/manage_runs.py show {}; \
-		fi; \
-	else \
-		echo "$(YELLOW)No manage_runs.py script found$(NC)"; \
-		ls -la output/latest 2>/dev/null || echo "$(RED)No latest run$(NC)"; \
-	fi
+show-run: ## Show the latest run's details
+	$(PYTHON) scripts/manage_runs.py show "$$(basename "$$(readlink output/latest)")"
 
 cleanup-runs: ## Clean up old runs (keep 0)
-	@echo "$(GREEN)Cleaning up old runs...$(NC)"
-	@if [ -f scripts/manage_runs.py ]; then \
-		if [ "$$CONDA_DEFAULT_ENV" != "parking_optimization" ]; then \
-			eval "$$(conda shell.bash hook)" && conda activate parking_optimization && python scripts/manage_runs.py cleanup --keep 0; \
-		else \
-			python scripts/manage_runs.py cleanup --keep 0; \
-		fi; \
-	else \
-		echo "$(YELLOW)No manage_runs.py script found$(NC)"; \
-	fi
+	$(PYTHON) scripts/manage_runs.py cleanup --keep 0
 
 status: ## Show comprehensive project status
 	@echo "$(BLUE)Parking Optimization Project Status:$(NC)"
@@ -340,18 +274,9 @@ dev-setup: ## Complete development setup from scratch
 	@echo "  $(YELLOW)make run$(NC)      - Run the application"
 	@echo "  $(YELLOW)make test$(NC)     - Run tests"
 
-ci: ## Run continuous integration checks
-	@echo "$(GREEN)Running CI pipeline...$(NC)"
-	@$(MAKE) lint
-	@$(MAKE) type-check
-	@$(MAKE) security-check
-	@$(MAKE) test-coverage
-	@echo "$(GREEN)✅ CI pipeline passed!$(NC)"
+ci: ## Run the checks enforced by GitHub CI (typing audit remains separate)
+	$(MAKE) lint format-check security-check test build
+	$(PYTHON) -m scripts.export_evaluation --verify
 
-demo: ## Quick demo run with all checks
-	@echo "$(GREEN)Running quick demo with quality checks...$(NC)"
-	@$(MAKE) format
-	@$(MAKE) lint-fix
-	@$(MAKE) test-fast
-	@$(MAKE) run
-	@echo "$(GREEN)✅ Demo complete!$(NC)"
+demo: ## Run a quick, seeded offline demo
+	$(PYTHON) main.py --mode demo

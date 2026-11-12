@@ -10,6 +10,7 @@ class MapService(abc.ABC):
             raise ValueError(f"API key for {self.__class__.__name__} is required.")
         self.api_key = api_key
         self.base_url: str = ""
+        self.request_timeout = (3.05, 10)  # Connect and read timeouts, in seconds.
 
     @abc.abstractmethod
     def get_traffic_incidents(self, bounding_box: List[float]) -> Dict[str, Any]:

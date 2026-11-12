@@ -140,8 +140,9 @@ class AlgorithmValidationSuite:
                 {
                     "name": "Multiple Options",
                     "start": (42.963, -85.668),
-                    "expected_zones": lambda x: len(x)
-                    >= 1,  # Should find multiple options
+                    "expected_zones": lambda x: (
+                        len(x) >= 1
+                    ),  # Should find multiple options
                     "expected_distance": lambda x: all(
                         r.total_distance > 0 for r in x.values()
                     ),

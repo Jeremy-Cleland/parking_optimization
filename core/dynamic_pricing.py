@@ -3,6 +3,7 @@ Dynamic Pricing Algorithm Implementation
 Uses game-theoretic principles and approximation algorithms
 """
 
+import math
 import warnings
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -30,6 +31,7 @@ class DynamicPricingEngine:
         max_price: float = 10.0,
         target_occupancy: float = 0.85,
         price_adjustment_rate: float = 0.1,
+        max_change_fraction: float = 0.15,
     ):
         """
         Initialize pricing engine
@@ -40,7 +42,11 @@ class DynamicPricingEngine:
             target_occupancy: Target occupancy rate for optimal availability
             price_adjustment_rate: Rate of price change (0-1)
         """
-        if min_price <= 0 or max_price <= min_price:
+        if (
+            not all(math.isfinite(x) for x in (min_price, max_price))
+            or min_price <= 0
+            or max_price <= min_price
+        ):
             raise PricingError(
                 "Invalid price range", {"min_price": min_price, "max_price": max_price}
             )
@@ -53,6 +59,9 @@ class DynamicPricingEngine:
                 "Invalid price adjustment rate", {"rate": price_adjustment_rate}
             )
 
+        if not 0 < max_change_fraction <= 1:
+            raise ValueError("max_change_fraction must be in (0, 1]")
+        self.max_change_fraction = max_change_fraction
         self.min_price = min_price
         self.max_price = max_price
         self.target_occupancy = target_occupancy
@@ -67,6 +76,7 @@ class DynamicPricingEngine:
         zone: ParkingZone,
         nearby_zones: List[ParkingZone],
         demand_forecast: Optional[float] = None,
+        current_time: Optional[datetime] = None,
     ) -> float:
         """
         Calculate optimal price for a zone using approximation algorithm
@@ -102,7 +112,9 @@ class DynamicPricingEngine:
             )
 
         # Time-of-day factor
-        time_factor = self._calculate_time_factor(datetime.now(), zone.zone_type)
+        time_factor = self._calculate_time_factor(
+            current_time or datetime.now(), zone.zone_type
+        )
 
         # Calculate new price using multiplicative factors
         new_price = (
@@ -117,7 +129,16 @@ class DynamicPricingEngine:
         smoothed_price = self._smooth_price_change(zone.current_price, new_price)
 
         # Enforce price bounds
-        return np.clip(smoothed_price, self.min_price, self.max_price)
+        return self.bound_price(zone.current_price, smoothed_price)
+
+    def bound_price(self, previous: float, proposed: float) -> float:
+        """Enforce the per-cycle movement limit and absolute policy limits."""
+        bounded = np.clip(
+            proposed,
+            previous * (1 - self.max_change_fraction),
+            previous * (1 + self.max_change_fraction),
+        )
+        return float(np.clip(bounded, self.min_price, self.max_price))
 
     def _calculate_occupancy_factor(self, occupancy_rate: float) -> float:
         """
@@ -223,7 +244,13 @@ class DynamicPricingEngine:
         """
         return current_price + self.price_adjustment_rate * (new_price - current_price)
 
-    def optimize_city_pricing(self, zones: List[ParkingZone]) -> Dict[str, float]:
+    def optimize_city_pricing(
+        self,
+        zones: List[ParkingZone],
+        current_time: Optional[datetime] = None,
+        demand_forecasts: Optional[Dict[str, float]] = None,
+        apply: bool = True,
+    ) -> Dict[str, float]:
         """
         Optimize pricing across all zones simultaneously
         Uses approximation algorithm for the NP-hard global optimization
@@ -235,21 +262,24 @@ class DynamicPricingEngine:
         """
         prices = {}
 
-        # Sort zones by current occupancy (greedy heuristic)
-        sorted_zones = sorted(zones, key=lambda z: z.occupancy_rate, reverse=True)
-
-        # Iteratively price each zone considering already-priced zones
-        for i, zone in enumerate(sorted_zones):
+        # All proposals read the same snapshot. Commit only after every proposal.
+        for zone in zones:
             # Find nearby zones (simplified - in practice would use geographic data)
             nearby_zones = [
-                z for z in sorted_zones[:i] if self._are_zones_nearby(zone, z)
+                z for z in zones if z.id != zone.id and self._are_zones_nearby(zone, z)
             ]
 
-            optimal_price = self.calculate_zone_price(zone, nearby_zones)
+            optimal_price = self.calculate_zone_price(
+                zone,
+                nearby_zones,
+                current_time=current_time,
+                demand_forecast=(demand_forecasts or {}).get(zone.id),
+            )
             prices[zone.id] = optimal_price
 
-            # Update zone's current price for next iteration
-            zone.current_price = optimal_price
+        if apply:
+            for zone in zones:
+                zone.current_price = prices[zone.id]
 
         return prices
 
@@ -285,7 +315,7 @@ class DynamicPricingEngine:
             "calculate_zone_price": "O(k) where k = nearby zones",
             "optimize_city_pricing": "O(z²) where z = total zones",
             "space_complexity": "O(z) for storing zone prices",
-            "approximation_ratio": "Within 1.5x of optimal (proven bound)",
+            "approximation_ratio": "Not established; heuristic policy requires baseline validation",
             "notes": "Uses greedy heuristic with game-theoretic adjustments",
         }
 

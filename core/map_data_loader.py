@@ -4,6 +4,8 @@ Handles loading and processing of Grand Rapids map data including road networks,
 parking infrastructure, and city boundaries.
 """
 
+import hashlib
+import math
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -11,6 +13,8 @@ import geopandas as gpd
 import networkx as nx
 import numpy as np
 import osmnx as ox
+import pandas as pd
+from pyproj import CRS
 from shapely.geometry import Point
 
 from core.config import get_config
@@ -42,6 +46,13 @@ class MapDataLoader:
         # Cached data
         self._network_nodes: Optional[List[int]] = None
         self._parking_zones: Optional[List[Dict]] = None
+        self.validation_report = {
+            "status": "not_loaded",
+            "provenance": "Local files; original publisher and retrieval date are unverified unless supplied separately",
+            "warnings": [],
+            "files": {},
+            "zones": [],
+        }
 
         logger.info(f"MapDataLoader initialized with data directory: {self.data_dir}")
 
@@ -63,11 +74,20 @@ class MapDataLoader:
 
             # Load boundary
             self.load_boundary()
+            self.get_parking_zones()
+            for path in sorted(self.data_dir.iterdir()):
+                if path.suffix in {".geojson", ".graphml"}:
+                    self.validation_report["files"][path.name] = hashlib.sha256(
+                        path.read_bytes()
+                    ).hexdigest()
 
+            self.validation_report["status"] = "validated_with_assumptions"
             logger.info("All map data loaded successfully")
             return True
 
         except Exception as e:
+            self.validation_report["status"] = "failed"
+            self.validation_report["error"] = str(e)
             logger.error(f"Failed to load map data: {e}")
             return False
 
@@ -82,6 +102,20 @@ class MapDataLoader:
 
         logger.info(f"Loading road network from {network_file}")
         self.road_network = ox.load_graphml(network_file)
+        if CRS(self.road_network.graph.get("crs")) != CRS("EPSG:4326"):
+            raise ValueError(
+                "Road network must use EPSG:4326 latitude/longitude coordinates"
+            )
+        for _node, attrs in self.road_network.nodes(data=True):
+            self._validate_coordinates((attrs.get("y"), attrs.get("x")))
+        for _u, _v, attrs in self.road_network.edges(data=True):
+            if (
+                not math.isfinite(float(attrs.get("length", -1)))
+                or float(attrs.get("length", -1)) < 0
+            ):
+                raise ValueError(
+                    "Every road edge requires finite nonnegative length in meters"
+                )
 
         # Cache network nodes for random sampling
         self._network_nodes = list(self.road_network.nodes())
@@ -109,8 +143,12 @@ class MapDataLoader:
 
         logger.info("Loading parking infrastructure data...")
 
-        self.parking_lots_gdf = gpd.read_file(lots_file)
-        self.parking_meters_gdf = gpd.read_file(meters_file)
+        self.parking_lots_gdf = self._normalize_geometry(
+            gpd.read_file(lots_file), "lots"
+        )
+        self.parking_meters_gdf = self._normalize_geometry(
+            gpd.read_file(meters_file), "meters"
+        )
 
         logger.info(
             f"Loaded {len(self.parking_lots_gdf)} parking lots and "
@@ -129,7 +167,9 @@ class MapDataLoader:
             )
 
         logger.info(f"Loading downtown boundary from {boundary_file}")
-        self.boundary_gdf = gpd.read_file(boundary_file)
+        self.boundary_gdf = self._normalize_geometry(
+            gpd.read_file(boundary_file), "boundary"
+        )
 
         return self.boundary_gdf
 
@@ -223,38 +263,65 @@ class MapDataLoader:
             centroid = lot.geometry.centroid
 
             # Extract capacity (might need adjustment based on actual data structure)
-            capacity = self._extract_capacity(lot)
+            capacity, capacity_source = self._validated_capacity(
+                lot, self.parking_lots_gdf.crs, False
+            )
+            hourly_rate, rate_source = self._validated_rate(lot, 2.0)
 
             zone = {
                 "id": f"lot_{idx}",
                 "type": "lot",
                 "coordinates": (centroid.y, centroid.x),  # (lat, lon)
                 "capacity": capacity,
-                "hourly_rate": self._extract_rate(lot),
+                "hourly_rate": hourly_rate,
+                "accessible": self._accessible(lot),
                 "geometry": lot.geometry,
                 "properties": dict(lot.drop("geometry"))
                 if hasattr(lot, "drop")
                 else {},
             }
             zones.append(zone)
+            self.validation_report["zones"].append(
+                {
+                    "id": zone["id"],
+                    "capacity_source": capacity_source,
+                    "rate_source": rate_source,
+                }
+            )
 
         # Process parking meters
         for idx, meter in self.parking_meters_gdf.iterrows():
             centroid = meter.geometry.centroid
 
+            capacity, capacity_source = self._validated_capacity(
+                meter, self.parking_meters_gdf.crs, True
+            )
+            hourly_rate, rate_source = self._validated_rate(meter, 1.5)
             zone = {
                 "id": f"meter_{idx}",
                 "type": "meter",
                 "coordinates": (centroid.y, centroid.x),  # (lat, lon)
-                "capacity": self._extract_meter_capacity(meter),
-                "hourly_rate": self._extract_meter_rate(meter),
+                "capacity": capacity,
+                "hourly_rate": hourly_rate,
+                "accessible": self._accessible(meter),
                 "geometry": meter.geometry,
                 "properties": dict(meter.drop("geometry"))
                 if hasattr(meter, "drop")
                 else {},
             }
             zones.append(zone)
+            self.validation_report["zones"].append(
+                {
+                    "id": zone["id"],
+                    "capacity_source": capacity_source,
+                    "rate_source": rate_source,
+                }
+            )
 
+        if not zones:
+            raise ValueError("Parking dataset has no zones")
+        for zone in zones:
+            self._validate_coordinates(zone["coordinates"])
         self._parking_zones = zones
         logger.info(
             f"Processed {len(zones)} parking zones ({len(self.parking_lots_gdf)} lots, "
@@ -263,70 +330,103 @@ class MapDataLoader:
 
         return zones
 
-    def _extract_capacity(self, lot_row) -> int:
-        """Extract capacity from parking lot data."""
-        # This may need adjustment based on actual data structure
-        capacity_fields = ["capacity", "spaces", "total_spaces", "num_spaces"]
+    @staticmethod
+    def _validate_coordinates(coordinates):
+        lat, lon = coordinates
+        if (
+            lat is None
+            or lon is None
+            or not math.isfinite(float(lat))
+            or not math.isfinite(float(lon))
+            or not -90 <= float(lat) <= 90
+            or not -180 <= float(lon) <= 180
+        ):
+            raise ValueError("Invalid latitude/longitude coordinates")
 
-        for field in capacity_fields:
-            if field in lot_row and lot_row[field] is not None:
-                try:
-                    return int(lot_row[field])
-                except (ValueError, TypeError):
-                    continue
+    def _normalize_geometry(self, frame, label):
+        if frame.crs is None:
+            raise ValueError(f"{label} dataset requires an explicit CRS")
+        if (
+            frame.geometry.isna().any()
+            or frame.geometry.is_empty.any()
+            or not frame.geometry.is_valid.all()
+        ):
+            raise ValueError(f"{label} contains missing, empty or invalid geometry")
+        if CRS(frame.crs) != CRS("EPSG:4326"):
+            self.validation_report["warnings"].append(
+                f"{label}: reprojected {frame.crs} to EPSG:4326"
+            )
+            frame = frame.to_crs("EPSG:4326")
+        return frame
 
-        # Default capacity based on lot size if no explicit capacity
-        area = lot_row.geometry.area
-        # Rough estimate: 25 sq meters per parking space
-        return max(10, int(area / 25))
+    @staticmethod
+    def _accessible(row):
+        # Unknown accessibility never qualifies as confirmed accessible parking.
+        value = row.get("accessible", row.get("wheelchair", False))
+        return str(value).lower() in {"yes", "true", "1"}
 
-    def _extract_rate(self, lot_row) -> float:
-        """Extract hourly rate from parking lot data."""
-        rate_fields = ["hourly_rate", "rate", "price", "cost"]
+    def _validated_capacity(self, row, crs, is_meter):
+        for field in ["capacity", "spaces", "spots", "total_spaces", "num_spaces"]:
+            value = row.get(field)
+            if value is not None and not pd.isna(value):
+                number = float(value)
+                if not math.isfinite(number) or number < 1 or not number.is_integer():
+                    raise ValueError(f"Invalid positive integer capacity in {field}")
+                return int(number), f"field:{field}"
+        geometry = row.geometry
+        if geometry.geom_type in {"Polygon", "MultiPolygon"}:
+            series = gpd.GeoSeries([geometry], crs=crs)
+            metric_crs = series.estimate_utm_crs()
+            if metric_crs is None:
+                raise ValueError("Cannot select a metric CRS for area-derived capacity")
+            capacity = max(1, int(series.to_crs(metric_crs).area.iloc[0] / 25))
+            source = "estimate:metric_area_m2/25"
+        else:
+            capacity = 8 if is_meter else 10
+            source = f"assumption:default_{capacity}_spaces"
+        self.validation_report["warnings"].append(f"Capacity uses {source}")
+        return capacity, source
 
-        for field in rate_fields:
-            if field in lot_row and lot_row[field] is not None:
-                try:
-                    return float(lot_row[field])
-                except (ValueError, TypeError):
-                    continue
+    def _validated_rate(self, row, default):
+        for field in ["hourly_rate", "cost_per_hour", "rate", "Rate", "price", "cost"]:
+            value = row.get(field)
+            if value is None or pd.isna(value):
+                continue
+            number = float(value)
+            if not math.isfinite(number) or number < 0:
+                raise ValueError(f"Invalid nonnegative price in {field}")
+            units = row.get("rate_unit", row.get("rate_units"))
+            if units is None or pd.isna(units):
+                units = "hour"
+                if field not in {"hourly_rate", "cost_per_hour"}:
+                    self.validation_report["warnings"].append(
+                        f"{field}: missing rate unit; assumed USD/hour"
+                    )
+            units = str(units).lower()
+            if units in {"minute", "per_minute", "usd/minute"}:
+                number *= 60
+            elif units not in {"hour", "hourly", "per_hour", "usd/hour"}:
+                raise ValueError(f"Unsupported rate unit: {units}")
+            currency = row.get("currency", "USD")
+            if str(currency).upper() != "USD":
+                raise ValueError("Only explicitly USD rates are supported")
+            return number, f"field:{field};USD/{units}"
+        self.validation_report["warnings"].append(
+            f"Rate missing; assumed USD {default}/hour"
+        )
+        return default, "assumption:default_USD/hour"
 
-        # Default rate for lots
-        return 2.0
+    def _extract_capacity(self, row):
+        return self._validated_capacity(row, "EPSG:4326", False)[0]
 
-    def _extract_meter_capacity(self, meter_row) -> int:
-        """Extract capacity from meter zone data."""
-        # Meters typically have fewer spaces
-        capacity_fields = ["spaces", "capacity", "num_spaces"]
+    def _extract_meter_capacity(self, row):
+        return self._validated_capacity(row, "EPSG:4326", True)[0]
 
-        for field in capacity_fields:
-            if field in meter_row and meter_row[field] is not None:
-                try:
-                    return int(meter_row[field])
-                except (ValueError, TypeError):
-                    continue
+    def _extract_rate(self, row):
+        return self._validated_rate(row, 2.0)[0]
 
-        # Default meter capacity
-        return 8
-
-    def _extract_meter_rate(self, meter_row) -> float:
-        """Extract hourly rate from meter data."""
-        rate_fields = ["rate", "hourly_rate", "price", "cost", "Rate"]
-
-        for field in rate_fields:
-            if field in meter_row and meter_row[field] is not None:
-                try:
-                    # Handle various rate formats (per hour, per minute, etc.)
-                    rate = float(meter_row[field])
-                    # If it looks like per-minute rate, convert to hourly
-                    if rate < 1.0:
-                        rate *= 60
-                    return rate
-                except (ValueError, TypeError):
-                    continue
-
-        # Default meter rate
-        return 1.50
+    def _extract_meter_rate(self, row):
+        return self._validated_rate(row, 1.5)[0]
 
     def is_data_available(self) -> bool:
         """Check if all required data is loaded."""

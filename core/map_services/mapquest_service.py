@@ -30,12 +30,12 @@ class MapQuestService(MapService):
             "outFormat": "json",
         }
         try:
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, timeout=self.request_timeout)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
             # In a real app, you'd want to log this error.
-            print(f"Error fetching traffic data from MapQuest: {e}")
+            print(f"Error fetching traffic data from MapQuest: {type(e).__name__}")
             return {}
 
     def get_route(
@@ -59,9 +59,9 @@ class MapQuestService(MapService):
             "outFormat": "json",
         }
         try:
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, timeout=self.request_timeout)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            print(f"Error fetching route data from MapQuest: {e}")
+            print(f"Error fetching route data from MapQuest: {type(e).__name__}")
             return {}

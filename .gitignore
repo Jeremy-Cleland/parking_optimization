@@ -138,6 +138,9 @@ ehthumbs.db
 Thumbs.db
 
 # Project-specific output files
+output/runs/
+output/map_data/
+output/latest
 results.json
 simulation_results.json
 results_*.json

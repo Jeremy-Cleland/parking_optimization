@@ -64,7 +64,13 @@ class DriverBehaviorModel:
     Models complex driver decision-making with psychological realism
     """
 
-    def __init__(self):
+    def __init__(self, rng=None, np_rng=None, zone_ids=None):
+        # Simulation sampling does not require a cryptographic RNG.
+        self.rng = rng if rng is not None else random.Random()  # nosec B311
+        self.np_rng = np_rng if np_rng is not None else np.random.default_rng()
+        self.zone_ids = (
+            zone_ids if zone_ids is not None else [f"zone_{i}" for i in range(20)]
+        )
         self.driver_profiles = {}
         self.zone_popularity_history = {}  # Track social influence data
         self.pricing_memory = {}  # Drivers remember past prices
@@ -91,20 +97,22 @@ class DriverBehaviorModel:
             PersonalityType.HABITUAL: 0.15,
             PersonalityType.SOCIAL: 0.05,
         }
-        personality = np.random.choice(
+        personality = self.np_rng.choice(
             list(personality_weights.keys()), p=list(personality_weights.values())
         )
 
         # Generate correlated traits
-        base_income = np.random.beta(2, 5)  # Skewed toward lower incomes
-        tech_savvy = np.random.beta(3, 2) if base_income > 0.5 else np.random.beta(2, 3)
+        base_income = self.np_rng.beta(2, 5)  # Skewed toward lower incomes
+        tech_savvy = (
+            self.np_rng.beta(3, 2) if base_income > 0.5 else self.np_rng.beta(2, 3)
+        )
 
         # Price sensitivity inversely correlated with income
-        price_sensitivity = 1 - base_income + np.random.normal(0, 0.2)
+        price_sensitivity = 1 - base_income + self.np_rng.normal(0, 0.2)
         price_sensitivity = np.clip(price_sensitivity, 0, 1)
 
         # Time value roughly correlated with income (but with variation)
-        time_value = base_income * 50 + np.random.normal(0, 10)  # $/hour
+        time_value = base_income * 50 + self.np_rng.normal(0, 10)  # $/hour
         time_value = max(5, time_value)  # Minimum $5/hour
 
         profile = DriverProfile(
@@ -112,19 +120,19 @@ class DriverBehaviorModel:
             personality_type=personality,
             income_level=base_income,
             tech_savviness=tech_savvy,
-            environmental_consciousness=np.random.beta(2, 2),
-            patience_level=np.random.beta(3, 2)
+            environmental_consciousness=self.np_rng.beta(2, 2),
+            patience_level=self.np_rng.beta(3, 2)
             if personality != PersonalityType.RISK_SEEKING
-            else np.random.beta(1, 3),
+            else self.np_rng.beta(1, 3),
             price_sensitivity=price_sensitivity,
             time_value=time_value,
             preferred_zones=self._generate_preferred_zones(),
             usual_arrival_times=self._generate_arrival_patterns(),
             follows_crowds=personality == PersonalityType.SOCIAL
-            or np.random.random() < 0.3,
-            trusts_recommendations=tech_savvy > 0.6 and np.random.random() < 0.7,
-            learning_rate=np.random.uniform(0.1, 0.5),
-            memory_span=random.randint(5, 20),
+            or self.np_rng.random() < 0.3,
+            trusts_recommendations=tech_savvy > 0.6 and self.np_rng.random() < 0.7,
+            learning_rate=self.np_rng.uniform(0.1, 0.5),
+            memory_span=self.rng.randint(5, 20),
         )
 
         self.driver_profiles[driver_id] = profile
@@ -215,12 +223,16 @@ class DriverBehaviorModel:
         score = 0.0
 
         # Price component (negative utility)
-        price_utility = -option["price"] * profile.price_sensitivity
+        price_utility = (
+            -option.get("total_cost", option["price"]) * profile.price_sensitivity
+        )
         price_utility *= self.urgency_multipliers[urgency]
 
         # Distance/time component
         walk_time = option.get("walk_distance", 0) * 12  # Assume 12 min/km walking
-        time_cost = walk_time / 60 * profile.time_value  # Convert to dollar cost
+        time_cost = (
+            (walk_time + option.get("travel_time", 0)) / 60 * profile.time_value
+        )  # Convert to dollar cost
         distance_utility = -time_cost
 
         # Convenience factors
@@ -257,7 +269,7 @@ class DriverBehaviorModel:
         # Add personality-specific adjustments
         if profile.personality_type == PersonalityType.RISK_SEEKING:
             # Add randomness for risk-seekers (might choose suboptimal options)
-            score += np.random.normal(0, 0.5)
+            score += self.np_rng.normal(0, 0.5)
         elif profile.personality_type == PersonalityType.RISK_AVERSE:
             # Penalty for unknown zones
             if zone_id not in profile.preferred_zones:
@@ -298,8 +310,8 @@ class DriverBehaviorModel:
 
         elif profile.personality_type == PersonalityType.RISK_SEEKING:
             # Sometimes choose suboptimal options for variety
-            if np.random.random() < 0.3:  # 30% chance of non-optimal choice
-                choice_idx = min(random.randint(1, 3), len(scored_options) - 1)
+            if self.np_rng.random() < 0.3:  # 30% chance of non-optimal choice
+                choice_idx = min(self.rng.randint(1, 3), len(scored_options) - 1)
                 return scored_options[choice_idx][0]
             return scored_options[0][0]
 
@@ -342,24 +354,24 @@ class DriverBehaviorModel:
     def _generate_preferred_zones(self) -> List[str]:
         """Generate realistic preferred zones for a driver"""
         # Most people have 2-4 preferred zones
-        num_zones = random.randint(2, 4)
-        zone_pool = [f"zone_{i}" for i in range(20)]  # Assume 20 zones available
-        return random.sample(zone_pool, min(num_zones, len(zone_pool)))
+        num_zones = self.rng.randint(2, 4)
+        zone_pool = self.zone_ids
+        return self.rng.sample(zone_pool, min(num_zones, len(zone_pool)))
 
     def _generate_arrival_patterns(self) -> List[int]:
         """Generate typical arrival time patterns"""
         patterns = []
 
         # Work commute pattern
-        if np.random.random() < 0.7:  # 70% have regular work schedule
+        if self.np_rng.random() < 0.7:  # 70% have regular work schedule
             patterns.extend([8, 9])  # Morning arrival
 
         # Lunch pattern
-        if np.random.random() < 0.3:
+        if self.np_rng.random() < 0.3:
             patterns.append(12)
 
         # Evening activities
-        if np.random.random() < 0.5:
+        if self.np_rng.random() < 0.5:
             patterns.extend([18, 19, 20])
 
         return patterns

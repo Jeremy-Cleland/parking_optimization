@@ -1,12 +1,10 @@
-"""
-Real-Time Traffic Management
-Integrates with external traffic APIs for realistic traffic conditions
-"""
+"""Traffic observations with explicit sources, clocks, caching and offline replay."""
 
+import math
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -16,298 +14,166 @@ from core.map_services import MapService, get_map_service
 
 @dataclass
 class TrafficCondition:
-    """Represents traffic condition for a road segment"""
-
     segment_id: str
     speed_kmh: float
-    congestion_level: int  # 0-4 (0=free flow, 4=heavy congestion)
+    congestion_level: int
     incident: bool
-    travel_time_factor: float  # Multiplier for base travel time
+    travel_time_factor: float
     last_updated: datetime
-    is_real_data: bool = False  # Whether this data came from real API or fallback
-    delay_factor: float = 1.0  # Alias for travel_time_factor
+    is_real_data: bool = False
+    delay_factor: float = 1.0
+    source: str = "simulated"
 
 
 class TrafficManager:
-    """
-    Manages real-time traffic data from multiple sources
+    """Use measured duration ratios when available, otherwise labeled simulation.
+
+    Incident counts alone do not establish edge travel times. Live providers must
+    return a traffic duration and a comparable baseline duration to change weights.
     """
 
-    def __init__(self):
-        """
-        Initialize traffic manager using the application configuration.
-        """
+    def __init__(
+        self, np_rng: Optional[np.random.Generator] = None, enable_live: bool = False
+    ) -> None:
         config = get_config()
+        self.np_rng = np_rng if np_rng is not None else np.random.default_rng()
         self.map_provider_name = config.api.map_provider
-        api_key = config.active_api_key
-
-        print("🔧 Initializing TrafficManager:")
-        print(f"   Provider: {self.map_provider_name}")
-        print(f"   API Key Available: {'✅ Yes' if api_key else '❌ No'}")
-        print(f"   Has API Keys: {config.has_api_keys}")
-
         self.map_service: Optional[MapService] = None
-        if api_key:
-            try:
-                self.map_service = get_map_service(self.map_provider_name, api_key)
-                print(
-                    f"   Map Service: ✅ {self.map_service.__class__.__name__} initialized"
-                )
-            except (ValueError, ImportError) as e:
-                print(f"   Map Service: ❌ Failed to initialize: {e}")
-        else:
-            print("   Map Service: ❌ No API key available")
-
-        # Cache to avoid excessive API calls
-        self.traffic_cache = {}
+        if enable_live and config.active_api_key:
+            self.map_service = get_map_service(
+                self.map_provider_name, config.active_api_key
+            )
+        self.traffic_cache: Dict[str, TrafficCondition] = {}
         self.cache_duration = config.api.api_cache_ttl_seconds
-
-        # Fallback patterns when APIs are unavailable
-        self.fallback_patterns = self._initialize_fallback_patterns()
-
-        # Rate limiting
-        self.last_api_call = {}
         self.min_call_interval = 60 / config.api.max_api_calls_per_minute
-        print(
-            f"   Rate Limit: {config.api.max_api_calls_per_minute} calls/min ({self.min_call_interval:.1f}s between calls)"
-        )
+        self.last_api_call: Dict[str, float] = {}
 
     def get_traffic_condition(
-        self, origin: Tuple[float, float], destination: Tuple[float, float]
+        self,
+        origin: Tuple[float, float],
+        destination: Tuple[float, float],
+        current_time: Optional[datetime] = None,
     ) -> TrafficCondition:
-        """Alias for get_traffic_conditions (singular form)"""
-        return self.get_traffic_conditions(origin, destination)
+        return self.get_traffic_conditions(origin, destination, current_time)
 
     def get_traffic_conditions(
-        self, origin: Tuple[float, float], destination: Tuple[float, float]
+        self,
+        origin: Tuple[float, float],
+        destination: Tuple[float, float],
+        current_time: Optional[datetime] = None,
     ) -> TrafficCondition:
-        """
-        Get current traffic conditions between two points
-
-        Args:
-            origin: (lat, lon) starting point
-            destination: (lat, lon) ending point
-
-        Returns:
-            TrafficCondition object with current traffic data
-        """
-        segment_id = f"{origin[0]:.4f},{origin[1]:.4f}->{destination[0]:.4f},{destination[1]:.4f}"
-
-        # Check cache first
-        if self._is_cached_valid(segment_id):
+        now = current_time or datetime.now()
+        segment_id = f"{origin}->{destination}"
+        if self._is_cached_valid(segment_id, now):
             return self.traffic_cache[segment_id]
-
-        # Try real APIs with rate limiting
-        traffic_data = None
-
+        condition = None
         if self.map_service and self._can_make_api_call(self.map_provider_name):
+            # Account for unsuccessful calls as well as successful calls.
+            self.last_api_call[self.map_provider_name] = time.monotonic()
             try:
-                print(
-                    f"🌐 Making API call to {self.map_provider_name} for {segment_id}"
-                )
-                # Use bounding box for incidents, or route for specific traffic
-                bbox = [origin[0], origin[1], destination[0], destination[1]]
-                service_data = self.map_service.get_traffic_incidents(bounding_box=bbox)
-                self.last_api_call[self.map_provider_name] = time.time()
-
-                if service_data:
-                    print(f"✅ API response received: {len(service_data)} items")
-                    traffic_data = self._adapt_service_output(service_data, segment_id)
-                else:
-                    print("⚠️  API returned empty response")
-
-            except Exception as e:
-                print(f"❌ API call to {self.map_provider_name} failed: {e}")
-        else:
-            reasons = []
-            if not self.map_service:
-                reasons.append("no map service")
-            if not self._can_make_api_call(self.map_provider_name):
-                time_since = time.time() - self.last_api_call.get(
-                    self.map_provider_name, 0
-                )
-                reasons.append(
-                    f"rate limited (last call {time_since:.1f}s ago, need {self.min_call_interval:.1f}s)"
-                )
-            print(f"⚠️  Skipping API call: {', '.join(reasons)}")
-
-        # Fallback to pattern-based simulation
-        if traffic_data is None:
-            print(f"🔄 Using fallback traffic simulation for {segment_id}")
-            traffic_data = self._get_fallback_traffic(origin, destination)
-
-        # Cache the result
-        self.traffic_cache[segment_id] = traffic_data
-
-        return traffic_data
+                response = self.map_service.get_route(list(origin), list(destination))
+                condition = self._adapt_service_output(response, segment_id)
+            except Exception as exc:
+                print(f"Traffic provider unavailable ({type(exc).__name__})")
+        if condition is None:
+            condition = self._get_fallback_traffic(origin, destination, now)
+        self.traffic_cache[segment_id] = condition
+        return condition
 
     def _adapt_service_output(
-        self, service_data: Dict[str, any], segment_id: str
+        self, service_data: Dict[str, Any], segment_id: str
     ) -> Optional[TrafficCondition]:
-        """Adapts the output from a map service to a TrafficCondition object."""
-        if not service_data:
+        """Parse comparable durations; never infer measured speed from incident count."""
+        try:
+            routes = service_data.get("routes", [])
+            if self.map_provider_name == "google" and routes:
+                legs = routes[0].get("legs", [])
+                base = sum(leg["duration"]["value"] for leg in legs)
+                observed = sum(leg["duration_in_traffic"]["value"] for leg in legs)
+            elif self.map_provider_name == "tomtom" and routes:
+                summary = routes[0]["summary"]
+                observed = summary["travelTimeInSeconds"]
+                base = summary["noTrafficTravelTimeInSeconds"]
+            elif self.map_provider_name == "mapquest":
+                route = service_data["route"]
+                base, observed = route["time"], route["realTime"]
+            else:
+                return None
+            if (
+                not math.isfinite(base)
+                or not math.isfinite(observed)
+                or base <= 0
+                or observed <= 0
+            ):
+                return None
+            factor = observed / base
+        except (KeyError, TypeError, ValueError):
             return None
-
-        # This is a generic adapter. It needs to be made more specific for each provider's output.
-        # For now, let's assume a simple structure.
-        # Example for MapQuest-like incidents data
-        incidents = service_data.get("incidents", [])
-        congestion_level = 0
-        has_incident = False
-        if incidents:
-            has_incident = True
-            # A simple heuristic to determine congestion
-            congestion_level = len(incidents)  # More incidents = more congestion
-            congestion_level = min(4, congestion_level)
-
-        # A more sophisticated adapter would parse routes for travel time, etc.
-        # This is a simplified version for demonstration.
-        # We will assume a baseline traffic factor and adjust it based on incidents.
-        traffic_factor = 1.0 + (congestion_level * 0.2)
-        free_flow_speed = 45  # km/h
-        actual_speed = free_flow_speed / traffic_factor
-
         return TrafficCondition(
-            segment_id=segment_id,
-            speed_kmh=actual_speed,
-            congestion_level=congestion_level,
-            incident=has_incident,
-            travel_time_factor=traffic_factor,
-            last_updated=datetime.now(),
-            is_real_data=True,
-            delay_factor=traffic_factor,
+            segment_id,
+            45 / factor,
+            max(0, min(4, int((factor - 1) * 2))),
+            False,
+            factor,
+            datetime.now(),
+            True,
+            factor,
+            source=f"{self.map_provider_name}_route_duration_proxy",
         )
 
     def _get_fallback_traffic(
-        self, origin: Tuple[float, float], destination: Tuple[float, float]
+        self,
+        origin: Tuple[float, float],
+        destination: Tuple[float, float],
+        current_time: Optional[datetime] = None,
     ) -> TrafficCondition:
-        """Generate realistic traffic patterns when APIs are unavailable"""
-        current_hour = datetime.now().hour
-        weekday = datetime.now().weekday()
-
-        # Base traffic factor from patterns
-        base_factor = self.fallback_patterns[weekday][current_hour]
-
-        # Add some randomness
-        noise = np.random.normal(0, 0.2)
-        traffic_factor = max(0.8, base_factor + noise)
-
-        # Calculate derived metrics
-        free_flow_speed = 45  # km/h
-        actual_speed = free_flow_speed / traffic_factor
-        congestion_level = min(4, int((traffic_factor - 1) * 2))
-
+        now = current_time or datetime.now()
+        rush = now.weekday() < 5 and (7 <= now.hour <= 9 or 17 <= now.hour <= 19)
+        factor = max(0.8, (1.8 if rush else 1.1) + float(self.np_rng.normal(0, 0.2)))
         return TrafficCondition(
-            segment_id=f"{origin}->{destination}",
-            speed_kmh=actual_speed,
-            congestion_level=congestion_level,
-            incident=traffic_factor > 2.5 and np.random.random() < 0.1,
-            travel_time_factor=traffic_factor,
-            last_updated=datetime.now(),
-            is_real_data=False,
-            delay_factor=traffic_factor,
+            f"{origin}->{destination}",
+            45 / factor,
+            max(0, min(4, int((factor - 1) * 2))),
+            False,
+            factor,
+            now,
+            False,
+            factor,
+            "simulated",
         )
 
-    def _initialize_fallback_patterns(self) -> List[List[float]]:
-        """Initialize realistic traffic patterns for fallback"""
-        # 7 days x 24 hours of traffic factors
-        patterns = []
-
-        for day in range(7):  # 0=Monday, 6=Sunday
-            daily_pattern = []
-
-            for hour in range(24):
-                if day < 5:  # Weekdays
-                    if 7 <= hour <= 9:  # Morning rush
-                        factor = np.random.uniform(1.5, 2.2)
-                    elif 17 <= hour <= 19:  # Evening rush
-                        factor = np.random.uniform(1.6, 2.4)
-                    elif 10 <= hour <= 16:  # Business hours
-                        factor = np.random.uniform(1.1, 1.4)
-                    elif 20 <= hour <= 22:  # Evening
-                        factor = np.random.uniform(1.0, 1.3)
-                    else:  # Late night/early morning
-                        factor = np.random.uniform(0.8, 1.0)
-                else:  # Weekends
-                    if 10 <= hour <= 14:  # Weekend shopping/activity
-                        factor = np.random.uniform(1.2, 1.6)
-                    elif 19 <= hour <= 22:  # Weekend evening
-                        factor = np.random.uniform(1.1, 1.5)
-                    else:
-                        factor = np.random.uniform(0.9, 1.1)
-
-                daily_pattern.append(factor)
-
-            patterns.append(daily_pattern)
-
-        return patterns
-
-    def _is_cached_valid(self, segment_id: str) -> bool:
-        """Check if cached data is still valid"""
-        if segment_id not in self.traffic_cache:
+    def _is_cached_valid(
+        self, segment_id: str, current_time: Optional[datetime] = None
+    ) -> bool:
+        condition = self.traffic_cache.get(segment_id)
+        if condition is None:
             return False
-
-        cached_condition = self.traffic_cache[segment_id]
-        age = (datetime.now() - cached_condition.last_updated).total_seconds()
-
-        return age < self.cache_duration
+        now = (
+            datetime.now() if condition.is_real_data else current_time or datetime.now()
+        )
+        return 0 <= (now - condition.last_updated).total_seconds() < self.cache_duration
 
     def _can_make_api_call(self, api_name: str) -> bool:
-        """Check rate limiting for API calls"""
-        if api_name not in self.last_api_call:
-            return True
-
-        time_since_last = time.time() - self.last_api_call[api_name]
-        return time_since_last >= self.min_call_interval
+        return (
+            time.monotonic() - self.last_api_call.get(api_name, -math.inf)
+            >= self.min_call_interval
+        )
 
     def bulk_update_traffic(
-        self, road_segments: List[Tuple[Tuple[float, float], Tuple[float, float]]]
+        self, road_segments: List[Tuple]
     ) -> Dict[str, TrafficCondition]:
-        """
-        Efficiently update traffic for multiple road segments
+        conditions = [self.get_traffic_conditions(a, b) for a, b in road_segments]
+        return {condition.segment_id: condition for condition in conditions}
 
-        Args:
-            road_segments: List of (origin, destination) tuples
-
-        Returns:
-            Dictionary mapping segment_id to TrafficCondition
-        """
-        results = {}
-
-        # Prioritize segments that need updates
-        segments_to_update = []
-        for origin, destination in road_segments:
-            segment_id = f"{origin[0]:.4f},{origin[1]:.4f}->{destination[0]:.4f},{destination[1]:.4f}"
-
-            if not self._is_cached_valid(segment_id):
-                segments_to_update.append((origin, destination, segment_id))
-            else:
-                results[segment_id] = self.traffic_cache[segment_id]
-
-        # Update segments in batches to respect rate limits
-        for origin, destination, segment_id in segments_to_update:
-            traffic_condition = self.get_traffic_conditions(origin, destination)
-            results[segment_id] = traffic_condition
-
-            # Small delay to respect rate limits
-            time.sleep(0.1)
-
-        return results
-
-    def get_traffic_summary(self) -> Dict[str, float]:
-        """Get summary statistics of current traffic conditions"""
-        if not self.traffic_cache:
+    def get_traffic_summary(self) -> Dict:
+        conditions = list(self.traffic_cache.values())
+        if not conditions:
             return {}
-
-        traffic_factors = [tc.travel_time_factor for tc in self.traffic_cache.values()]
-        congestion_levels = [tc.congestion_level for tc in self.traffic_cache.values()]
-
         return {
-            "avg_traffic_factor": np.mean(traffic_factors),
-            "max_traffic_factor": np.max(traffic_factors),
-            "avg_congestion": np.mean(congestion_levels),
-            "incidents_count": sum(
-                1 for tc in self.traffic_cache.values() if tc.incident
+            "avg_traffic_factor": float(
+                np.mean([c.travel_time_factor for c in conditions])
             ),
-            "cached_segments": len(self.traffic_cache),
+            "cached_segments": len(conditions),
+            "provider_observations": sum(c.is_real_data for c in conditions),
+            "simulated_observations": sum(not c.is_real_data for c in conditions),
         }

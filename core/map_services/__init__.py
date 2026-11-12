@@ -8,7 +8,7 @@ from .tomtom_service import TomTomService
 # Import other services here as they are added
 
 # A mapping of provider names to service classes
-_SERVICE_PROVIDERS = {
+_SERVICE_PROVIDERS: dict[str, Type[MapService]] = {
     "mapquest": MapQuestService,
     "tomtom": TomTomService,
     "google": GoogleMapsService,

@@ -6,7 +6,7 @@ Creates organized folders for each simulation run with timestamp tracking
 import json
 import os
 import shutil
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -26,11 +26,7 @@ class RunMetadata:
     parameters: Dict
     duration_seconds: float = 0.0
     status: str = "running"  # running, completed, failed
-    artifacts: List[str] = None
-
-    def __post_init__(self):
-        if self.artifacts is None:
-            self.artifacts = []
+    artifacts: List[str] = field(default_factory=list)
 
 
 class RunManager:
@@ -62,7 +58,7 @@ class RunManager:
         """
         # Generate timestamp-based run ID
         timestamp = datetime.now()
-        run_id = f"run_{timestamp.strftime('%Y-%m-%d_%H-%M-%S')}"
+        run_id = f"run_{timestamp.strftime('%Y-%m-%d_%H-%M-%S-%f')}"
 
         # Create run directory
         self.current_run_dir = self.runs_dir / run_id
