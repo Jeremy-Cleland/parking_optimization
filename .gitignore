@@ -178,6 +178,10 @@ tmp/
 
 # Data files (if large)
 *.csv
+
+# Curated, compact public evaluation (raw inputs and runs stay ignored)
+!docs/evaluation/*.png
+!docs/evaluation/seed_outcomes.csv
 *.xlsx
 *.h5
 *.hdf5
