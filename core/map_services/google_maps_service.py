@@ -50,9 +50,9 @@ class GoogleMapsService(MapService):
             "key": self.api_key,
         }
         try:
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, timeout=self.request_timeout)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            print(f"Error fetching route data from Google Maps: {e}")
+            print(f"Error fetching route data from Google Maps: {type(e).__name__}")
             return {}

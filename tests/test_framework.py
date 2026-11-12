@@ -1033,7 +1033,7 @@ class TestFramework:
                 ]  # Percentage of total computation
                 colors = theme_colors["bar_colors"]
 
-                wedges, texts, autotexts = ax6.pie(
+                _wedges, texts, autotexts = ax6.pie(
                     comp_distribution,
                     labels=algorithms,
                     colors=colors,

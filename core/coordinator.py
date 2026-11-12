@@ -6,7 +6,7 @@ Manages distributed parking optimization across city zones
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -33,7 +33,7 @@ class District:
     def average_occupancy(self) -> float:
         if not self.zones:
             return 0.0
-        return np.mean([zone.occupancy_rate for zone in self.zones])
+        return sum(zone.occupied_spots for zone in self.zones) / self.total_capacity
 
 
 class CityCoordinator:
@@ -43,7 +43,10 @@ class CityCoordinator:
     """
 
     def __init__(
-        self, n_districts: int = 4, coordination_interval: int = 300
+        self,
+        n_districts: int = 4,
+        coordination_interval: int = 300,
+        route_optimizer: Optional[RouteOptimizer] = None,
     ):  # 5 minutes
         """
         Initialize city coordinator
@@ -52,12 +55,16 @@ class CityCoordinator:
             n_districts: Number of districts to divide city into
             coordination_interval: Seconds between coordination cycles
         """
+        if n_districts < 1:
+            raise ValueError("n_districts must be positive")
         self.n_districts = n_districts
         self.coordination_interval = coordination_interval
 
         self.districts: Dict[str, District] = {}
         self.pricing_engine = DynamicPricingEngine()
-        self.route_optimizer = RouteOptimizer()
+        self.route_optimizer = (
+            route_optimizer if route_optimizer is not None else RouteOptimizer()
+        )
         self.demand_predictors: Dict[str, DemandPredictor] = {}
 
         # Thread pool for parallel district optimization
@@ -87,15 +94,16 @@ class CityCoordinator:
         zones_sorted_lat = sorted(all_zones, key=lambda z: z.location[0])
 
         # Simple grid-based division (can be improved with k-means)
-        zones_per_district = len(all_zones) // self.n_districts
+        if not all_zones:
+            raise ValueError("At least one parking zone is required")
+        self.districts.clear()
+        self.demand_predictors.clear()
+        district_count = min(self.n_districts, len(all_zones))
+        zones_per_district, remainder = divmod(len(all_zones), district_count)
+        start_idx = 0
 
-        for i in range(self.n_districts):
-            start_idx = i * zones_per_district
-            end_idx = (
-                start_idx + zones_per_district
-                if i < self.n_districts - 1
-                else len(all_zones)
-            )
+        for i in range(district_count):
+            end_idx = start_idx + zones_per_district + (i < remainder)
 
             district_zones = zones_sorted_lat[start_idx:end_idx]
 
@@ -113,9 +121,14 @@ class CityCoordinator:
             self.districts[district.id] = district
 
             # Initialize demand predictor for district
-            self.demand_predictors[district.id] = DemandPredictor()
+            self.demand_predictors[district.id] = DemandPredictor(
+                capacity=district.total_capacity
+            )
+            start_idx = end_idx
 
-    def optimize_city_parking(self) -> Dict[str, any]:
+    def optimize_city_parking(
+        self, current_time: Optional[datetime] = None
+    ) -> Dict[str, any]:
         """
         Main optimization loop using divide-and-conquer
 
@@ -127,7 +140,8 @@ class CityCoordinator:
             Global optimization results
         """
         # Phase 1: Optimize each district independently (DIVIDE)
-        district_results = self._optimize_districts_parallel()
+        current_time = current_time or datetime.now()
+        district_results = self._optimize_districts_parallel(current_time)
 
         # Phase 2: Coordinate between districts (CONQUER)
         coordination_results = self._coordinate_districts(district_results)
@@ -136,20 +150,25 @@ class CityCoordinator:
         final_results = self._apply_global_optimization(
             district_results, coordination_results
         )
+        final_results["timestamp"] = current_time.isoformat()
 
         # Update global metrics
         self._update_global_metrics(final_results)
 
         return final_results
 
-    def _optimize_districts_parallel(self) -> Dict[str, Dict]:
+    def _optimize_districts_parallel(
+        self, current_time: Optional[datetime] = None
+    ) -> Dict[str, Dict]:
         """
         Optimize each district in parallel
         """
         futures = {}
 
         for district_id, district in self.districts.items():
-            future = self.executor.submit(self._optimize_single_district, district)
+            future = self.executor.submit(
+                self._optimize_single_district, district, current_time
+            )
             futures[district_id] = future
 
         # Collect results
@@ -159,7 +178,9 @@ class CityCoordinator:
 
         return results
 
-    def _optimize_single_district(self, district: District) -> Dict:
+    def _optimize_single_district(
+        self, district: District, current_time: Optional[datetime] = None
+    ) -> Dict:
         """
         Optimize a single district independently
 
@@ -177,15 +198,23 @@ class CityCoordinator:
 
         # Step 1: Predict demand for next hour
         for zone in district.zones:
-            if zone.occupancy_history:
+            if district.id in self.demand_predictors:
                 predictor = self.demand_predictors[district.id]
                 predictions = predictor.predict_demand(
-                    datetime.now(), zone.occupancy_rate, lookahead_hours=1
+                    current_time or datetime.now(),
+                    zone.occupancy_rate,
+                    lookahead_hours=1,
+                    capacity=zone.capacity,
                 )
                 results["predicted_demands"][zone.id] = predictions[0]
 
         # Step 2: Optimize pricing considering predictions
-        zone_prices = self.pricing_engine.optimize_city_pricing(district.zones)
+        zone_prices = self.pricing_engine.optimize_city_pricing(
+            district.zones,
+            current_time=current_time,
+            demand_forecasts=results["predicted_demands"],
+            apply=False,
+        )
         results["zone_prices"] = zone_prices
 
         # Step 3: Identify imbalanced zones
@@ -288,6 +317,12 @@ class CityCoordinator:
             "routing_recommendations": {},
         }
 
+        # Preserve the pre-cycle snapshot through district calculation and coordination.
+        previous_prices = {
+            zone.id: zone.current_price
+            for district in self.districts.values()
+            for zone in district.zones
+        }
         # Apply coordinated price adjustments
         for district_id, adjustment in coordination["border_adjustments"].items():
             district = self.districts[district_id]
@@ -296,13 +331,18 @@ class CityCoordinator:
                 if self._is_border_zone(zone, district):
                     old_price = district_results[district_id]["zone_prices"][zone.id]
                     new_price = old_price * adjustment
-                    new_price = np.clip(
-                        new_price,
-                        self.pricing_engine.min_price,
-                        self.pricing_engine.max_price,
+                    new_price = self.pricing_engine.bound_price(
+                        previous_prices[zone.id], new_price
                     )
                     final_results["updated_prices"][zone.id] = new_price
+                    zone.current_price = new_price
+                    district_results[district_id]["zone_prices"][zone.id] = new_price
 
+        for district_id, result in district_results.items():
+            for zone in self.districts[district_id].zones:
+                price = result["zone_prices"][zone.id]
+                zone.current_price = price
+                final_results["updated_prices"][zone.id] = price
         return final_results
 
     def _district_distance(self, district1_id: str, district2_id: str) -> float:

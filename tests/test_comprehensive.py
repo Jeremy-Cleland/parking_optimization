@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
+import networkx as nx
 import pytest
 
 # Add project root to path
@@ -20,8 +21,7 @@ from core import (
     CityCoordinator,
     DemandPredictor,
     DynamicPricingEngine,
-    Edge,
-    Node,
+    MapDataLoader,
     ParkingZone,
     RouteOptimizer,
 )
@@ -55,12 +55,12 @@ class TestParkingZone:
     def test_parking_operations(self, sample_zone):
         """Test parking and leaving operations"""
         # Test parking
-        assert sample_zone.try_park() is True
+        assert sample_zone.occupy_spot() is True
         assert sample_zone.occupied_spots == 1
         assert sample_zone.occupancy_rate == 0.02
 
         # Test leaving
-        assert sample_zone.leave() is True
+        assert sample_zone.release_spot() is True
         assert sample_zone.occupied_spots == 0
         assert sample_zone.occupancy_rate == 0.0
 
@@ -68,17 +68,11 @@ class TestParkingZone:
         """Test capacity enforcement"""
         # Fill the zone
         for _ in range(sample_zone.capacity):
-            assert sample_zone.try_park() is True
+            assert sample_zone.occupy_spot() is True
 
         # Try to exceed capacity
-        assert sample_zone.try_park() is False
-        assert sample_zone.is_full() is True
-
-    def test_price_updates(self, sample_zone):
-        """Test price updating"""
-        new_price = 5.0
-        sample_zone.update_price(new_price)
-        assert sample_zone.current_price == new_price
+        assert sample_zone.occupy_spot() is False
+        assert sample_zone.has_availability() is False
 
     @pytest.mark.parametrize(
         "zone_type,expected_valid",
@@ -126,7 +120,7 @@ class TestDynamicPricing:
             )
             # Simulate different occupancy levels
             for _ in range(i * 10):
-                zone.try_park()
+                zone.occupy_spot()
             zones.append(zone)
         return zones
 
@@ -148,7 +142,7 @@ class TestDynamicPricing:
 
         # Fill high occupancy zone to 90%
         for _ in range(90):
-            high_occupancy_zone.try_park()
+            high_occupancy_zone.occupy_spot()
 
         low_price = pricing_engine.calculate_zone_price(low_occupancy_zone, [])
         high_price = pricing_engine.calculate_zone_price(high_occupancy_zone, [])
@@ -179,78 +173,46 @@ class TestRouteOptimizer:
     @pytest.fixture
     def route_optimizer(self):
         """Create a route optimizer with sample network"""
-        optimizer = RouteOptimizer()
-
-        # Create a simple grid network
+        loader = MapDataLoader()
+        graph = nx.MultiDiGraph(crs="EPSG:4326")
         for i in range(5):
             for j in range(5):
-                node = Node(id=f"node_{i}_{j}", location=(i * 0.1, j * 0.1))
-                optimizer.add_node(node)
-
-        # Add horizontal edges
+                graph.add_node(i * 5 + j, y=i * 0.001, x=j * 0.001)
         for i in range(5):
-            for j in range(4):
-                edge = Edge(
-                    from_node=f"node_{i}_{j}",
-                    to_node=f"node_{i}_{j + 1}",
-                    distance=1.0,
-                    base_travel_time=1.0,
-                )
-                optimizer.add_edge(edge)
-                # Add reverse edge
-                reverse_edge = Edge(
-                    from_node=f"node_{i}_{j + 1}",
-                    to_node=f"node_{i}_{j}",
-                    distance=1.0,
-                    base_travel_time=1.0,
-                )
-                optimizer.add_edge(reverse_edge)
-
-        # Add vertical edges
-        for i in range(4):
             for j in range(5):
-                edge = Edge(
-                    from_node=f"node_{i}_{j}",
-                    to_node=f"node_{i + 1}_{j}",
-                    distance=1.0,
-                    base_travel_time=1.0,
-                )
-                optimizer.add_edge(edge)
-                # Add reverse edge
-                reverse_edge = Edge(
-                    from_node=f"node_{i + 1}_{j}",
-                    to_node=f"node_{i}_{j}",
-                    distance=1.0,
-                    base_travel_time=1.0,
-                )
-                optimizer.add_edge(reverse_edge)
-
-        return optimizer
+                node = i * 5 + j
+                for neighbor in [node + 1] if j < 4 else []:
+                    graph.add_edge(node, neighbor, length=100, travel_time=10)
+                    graph.add_edge(neighbor, node, length=100, travel_time=10)
+                if i < 4:
+                    graph.add_edge(node, node + 5, length=100, travel_time=10)
+                    graph.add_edge(node + 5, node, length=100, travel_time=10)
+        loader.road_network = graph
+        loader._parking_zones = [
+            {"id": "target", "coordinates": (0.002, 0.002), "hourly_rate": 2.0}
+        ]
+        return RouteOptimizer(map_loader=loader)
 
     def test_pathfinding(self, route_optimizer):
         """Test basic pathfinding functionality"""
-        path, cost = route_optimizer._modified_a_star("node_0_0", "node_2_2")
+        route = route_optimizer.find_optimal_route((0, 0))
+        assert route is not None
+        assert route.path_nodes[0] == 0
+        assert route.path_nodes[-1] == 12
+        assert route.total_distance == 400
+        assert route.total_time == 40
 
-        assert path is not None
-        assert len(path) > 0
-        assert path[0] == "node_0_0"
-        assert path[-1] == "node_2_2"
-        assert cost > 0
-
-    def test_no_path_exists(self, route_optimizer):
-        """Test handling when no path exists"""
-        path, cost = route_optimizer._modified_a_star("node_0_0", "nonexistent_node")
-
-        assert path == []
-        assert cost == float("inf")
+    def test_no_available_zone(self, route_optimizer):
+        assert (
+            route_optimizer.find_optimal_route((0, 0), available_parking_zones=[])
+            is None
+        )
 
     @pytest.mark.benchmark(group="routing")
     def test_routing_performance(self, benchmark, route_optimizer):
-        """Benchmark routing algorithm performance"""
-        result = benchmark(route_optimizer._modified_a_star, "node_0_0", "node_4_4")
-
-        path, cost = result
-        assert len(path) > 0
+        route = benchmark(route_optimizer.find_optimal_route, (0, 0))
+        assert route is not None
+        assert route.total_distance == 400
 
 
 class TestDemandPredictor:
@@ -289,10 +251,12 @@ class TestDemandPredictor:
         predictor.train_model(sample_data)
 
         future_time = datetime.now() + timedelta(hours=1)
-        prediction = predictor.predict_demand(future_time, weather_condition=0)
+        prediction = predictor.predict_demand(
+            future_time, current_occupancy=0.5, weather=0
+        )
 
-        assert isinstance(prediction, (int, float))
-        assert prediction >= 0
+        assert len(prediction) == 4
+        assert all(value >= 0 for value in prediction)
 
 
 class TestIntegration:
@@ -300,29 +264,31 @@ class TestIntegration:
 
     def test_small_simulation(self):
         """Test a small complete simulation"""
-        sim = CitySimulator(
-            n_zones=3, n_intersections=6, n_drivers=10, city_size_km=1.0
-        )
+        sim = CitySimulator(n_zones=3, n_drivers=10, use_real_data=False, seed=42)
 
         # Run very short simulation
         sim.run_simulation(duration_hours=0.1, time_step_minutes=5)
 
         # Verify simulation ran
         assert sim.current_time is not None
-        assert len(sim.zones) == 3
+        assert len(sim.parking_zones) == 3
 
-    @patch("core.traffic_manager.TrafficManager.get_real_time_traffic")
+    @patch("core.traffic_manager.TrafficManager.get_traffic_condition")
     def test_simulation_without_api(self, mock_traffic):
         """Test simulation works without real API calls"""
         # Mock the traffic API to return dummy data
-        mock_traffic.return_value = 1.5  # 1.5x normal travel time
+        from core.traffic_manager import TrafficCondition
 
-        sim = CitySimulator(n_zones=2, n_intersections=4, n_drivers=5, city_size_km=0.5)
+        mock_traffic.return_value = TrafficCondition(
+            "mock", 30, 1, False, 1.5, datetime(2026, 11, 12, 8)
+        )
+
+        sim = CitySimulator(n_zones=2, n_drivers=5, use_real_data=False, seed=42)
 
         sim.run_simulation(duration_hours=0.05, time_step_minutes=5)
 
         # Verify it completed without errors
-        assert len(sim.zones) == 2
+        assert len(sim.parking_zones) == 2
 
     def test_configuration_loading(self):
         """Test that configuration loads correctly"""
@@ -356,14 +322,12 @@ class TestPerformance:
         """Benchmark complete simulation performance"""
 
         def run_simulation():
-            sim = CitySimulator(
-                n_zones=5, n_intersections=15, n_drivers=25, city_size_km=2.0
-            )
+            sim = CitySimulator(n_zones=5, n_drivers=25, use_real_data=False, seed=42)
             sim.run_simulation(duration_hours=0.1, time_step_minutes=5)
             return sim
 
         result = benchmark(run_simulation)
-        assert len(result.zones) == 5
+        assert len(result.parking_zones) == 5
 
     @pytest.mark.benchmark(group="algorithms")
     def test_algorithm_scaling(self, benchmark):
@@ -406,26 +370,8 @@ class TestAPIIntegration:
 
         # These tests should work regardless of whether API keys are present
         assert isinstance(config.has_api_keys, bool)
-        assert isinstance(config.has_mapbox, bool)
+        assert isinstance(config.has_tomtom, bool)
         assert isinstance(config.has_google_maps, bool)
-
-    @pytest.mark.skipif(
-        not os.environ.get("MAPBOX_ACCESS_TOKEN"), reason="Mapbox API key not available"
-    )
-    def test_mapbox_integration(self):
-        """Test Mapbox API integration (if key available)"""
-        from core.traffic_manager import TrafficManager
-
-        traffic_manager = TrafficManager()
-
-        # Test with real coordinates (if API key is available)
-        traffic_factor = traffic_manager.get_real_time_traffic(
-            (40.7128, -74.0060),  # NYC
-            (40.7589, -73.9851),  # Times Square
-        )
-
-        assert isinstance(traffic_factor, (int, float))
-        assert traffic_factor > 0
 
 
 if __name__ == "__main__":

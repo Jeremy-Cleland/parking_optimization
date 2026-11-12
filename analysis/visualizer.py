@@ -24,7 +24,11 @@ class ParkingVisualizer:
     Creates visualizations for parking optimization results
     """
 
-    def __init__(self, results_file: str = "output/results.json"):
+    def __init__(
+        self,
+        results_file: str = "output/results.json",
+        output_dir: str = "visualization_output",
+    ):
         """
         Initialize visualizer with results file
 
@@ -33,7 +37,7 @@ class ParkingVisualizer:
         """
         self.results_file = results_file
         self.results = None
-        self.output_dir = "visualization_output"
+        self.output_dir = str(output_dir)
 
         # Create output directory
         os.makedirs(self.output_dir, exist_ok=True)
@@ -54,6 +58,51 @@ class ParkingVisualizer:
         except FileNotFoundError:
             print(f"Results file {self.results_file} not found. Run simulation first.")
             self.results = None
+
+    def _context_title(self, title):
+        config = self.results.get("simulation_config", {})
+        policy = f"{config.get('pricing_policy', 'legacy')}/{config.get('routing_policy', 'legacy')}"
+        return f"{title}\nSimulated | {policy} | seed {config.get('seed', 'unknown')}"
+
+    def _outcome_counts(self):
+        metrics = self.results["metrics"]
+        parked, rejected = metrics["successful_parks"], metrics["rejected_drivers"]
+        unresolved = self.results.get("driver_outcomes", {}).get("unresolved")
+        if unresolved is None:
+            total = self.results.get("simulation_config", {}).get(
+                "n_drivers", parked + rejected
+            )
+            unresolved = max(0, total - parked - rejected)
+        return [parked, rejected, unresolved]
+
+    def _elapsed_minutes(self):
+        """Use recorded interval ends, retaining support for older five-minute runs."""
+        metrics = self.results["metrics"]
+        step = self.results.get("simulation_config", {}).get("time_step_minutes", 5)
+        return metrics.get(
+            "elapsed_minutes",
+            [(i + 1) * step for i in range(len(metrics["avg_occupancy"]))],
+        )
+
+    def _hourly_revenue(self):
+        """Allocate each recorded interval to elapsed-hour bins, including partial hours."""
+        totals = {}
+        start = 0
+        for end, revenue in zip(
+            self._elapsed_minutes(),
+            self.results["metrics"]["total_revenue"],
+            strict=True,
+        ):
+            cursor = start
+            while cursor < end:
+                hour = int(cursor // 60)
+                boundary = min(end, (hour + 1) * 60)
+                totals[hour] = totals.get(hour, 0) + revenue * (boundary - cursor) / (
+                    end - start
+                )
+                cursor = boundary
+            start = end
+        return list(totals.values())
 
     def create_all_visualizations(self):
         """Create all visualization types"""
@@ -88,12 +137,11 @@ class ParkingVisualizer:
         metrics = self.results["metrics"]
 
         # Create time axis (5-minute intervals)
-        n_steps = len(metrics["avg_occupancy"])
-        time_steps = [i * 5 for i in range(n_steps)]  # minutes
+        time_steps = self._elapsed_minutes()
 
         fig, axes = plt.subplots(2, 2, figsize=(16, 12))
         fig.suptitle(
-            "Parking System Performance Metrics",
+            self._context_title("Parking Policy Observations"),
             fontsize=20,
             color=self.theme_colors["text_color"],
             y=0.95,
@@ -161,7 +209,10 @@ class ParkingVisualizer:
                 markevery=10,
             )
             format_axis_labels(
-                ax, "Driver Search Times", "Driver Number", "Search Time (minutes)"
+                ax,
+                "Successful-Driver Search Delay",
+                "Successful Parking Number",
+                "Search Time (minutes)",
             )
             ax.grid(True, alpha=0.3)
 
@@ -169,24 +220,24 @@ class ParkingVisualizer:
         ax = axes[1, 1]
         total_drivers = metrics["successful_parks"] + metrics["rejected_drivers"]
         if total_drivers > 0:
-            success_rate = (metrics["successful_parks"] / total_drivers) * 100
-            rejection_rate = (metrics["rejected_drivers"] / total_drivers) * 100
-
-            labels = ["Successfully Parked", "Rejected"]
-            sizes = [success_rate, rejection_rate]
+            labels = ["Parked", "Rejected", "Unresolved"]
+            sizes = self._outcome_counts()
             colors = [
                 self.theme_colors["main_color"],
                 self.theme_colors["bar_colors"][3],
+                self.theme_colors["bar_colors"][1],
             ]
 
-            wedges, texts, autotexts = ax.pie(
+            _wedges, _texts, autotexts = ax.pie(
                 sizes,
                 labels=labels,
                 colors=colors,
                 autopct="%1.1f%%",
                 startangle=90,
                 textprops={"color": self.theme_colors["text_color"], "fontsize": 12},
-                explode=(0.05, 0),  # slightly separate the slices
+                explode=tuple(
+                    [0.05] + [0] * (len(sizes) - 1)
+                ),  # slightly separate the slices
             )
 
             # Improve pie chart text styling
@@ -195,7 +246,7 @@ class ParkingVisualizer:
                 autotext.set_fontweight("bold")
                 autotext.set_fontsize(11)
 
-            format_axis_labels(ax, f"Parking Success Rate (n={total_drivers} drivers)")
+            format_axis_labels(ax, f"Resolved Parking Outcomes (n={total_drivers})")
 
         # Remove top and right spines for cleaner look
         for ax_row in axes:
@@ -212,7 +263,7 @@ class ParkingVisualizer:
 
         fig, axes = plt.subplots(1, 2, figsize=(16, 8))
         fig.suptitle(
-            "Revenue Analysis",
+            self._context_title("Occupied-Space Revenue"),
             fontsize=20,
             color=self.theme_colors["text_color"],
             y=0.95,
@@ -221,7 +272,7 @@ class ParkingVisualizer:
         # 1. Revenue rate over time
         ax = axes[0]
         revenue_per_step = metrics["total_revenue"]
-        time_steps = [i * 5 for i in range(len(revenue_per_step))]
+        time_steps = self._elapsed_minutes()
 
         ax.plot(
             time_steps,
@@ -233,7 +284,8 @@ class ParkingVisualizer:
         )
 
         # Moving average
-        window = 12  # 1 hour
+        step = self.results.get("simulation_config", {}).get("time_step_minutes", 5)
+        window = max(1, int(60 / step))
         if len(revenue_per_step) >= window:
             ma = pd.Series(revenue_per_step).rolling(window=window).mean()
             ax.plot(
@@ -242,11 +294,14 @@ class ParkingVisualizer:
                 color=self.theme_colors["main_color"],
                 linewidth=3,
                 alpha=0.9,
-                label="1-hour MA",
+                label=f"{window}-interval moving average",
             )
 
         format_axis_labels(
-            ax, "Revenue Generation Rate", "Time (minutes)", "Revenue per 5 min ($)"
+            ax,
+            "Revenue by Simulation Interval",
+            "Time (minutes)",
+            "Revenue per interval ($)",
         )
         format_legend(ax, loc="best")
         ax.grid(True, alpha=0.3)
@@ -255,9 +310,7 @@ class ParkingVisualizer:
 
         # 2. Revenue by hour
         ax = axes[1]
-        hourly_revenue = []
-        for i in range(0, len(revenue_per_step), 12):  # 12 steps = 1 hour
-            hourly_revenue.append(sum(revenue_per_step[i : i + 12]))
+        hourly_revenue = self._hourly_revenue()
 
         hours = list(range(len(hourly_revenue)))
         bars = ax.bar(
@@ -328,7 +381,7 @@ class ParkingVisualizer:
         # Calculate optimal number of bins
         n_bins = min(30, max(10, len(search_times) // 10))
 
-        n, bins, patches = ax.hist(
+        _n, _bins, patches = ax.hist(
             search_times,
             bins=n_bins,
             color=self.theme_colors["main_color"],
@@ -414,31 +467,18 @@ class ParkingVisualizer:
         """Create occupancy heatmap over time"""
         metrics = self.results["metrics"]
 
-        # Simulate zone-wise occupancy data (in real implementation, this would come from simulation)
-        config = self.results.get("simulation_config", {})
-        n_zones = config.get(
-            "total_zones", self.results.get("parameters", {}).get("n_zones", 20)
+        history = metrics.get("zone_occupancy")
+        if not history:
+            print("No recorded per-zone occupancy history; skipping heatmap.")
+            return
+        zone_ids = list(history[0])
+        zone_occupancy = np.array(
+            [[record[zone_id] for record in history] for zone_id in zone_ids]
         )
-        n_steps = len(metrics["avg_occupancy"])
-
-        # Create synthetic zone occupancy data based on average
-        np.random.seed(42)  # For reproducible results
-        zone_occupancy = np.zeros((n_zones, n_steps))
-
-        for t in range(n_steps):
-            avg_occ = metrics["avg_occupancy"][t]
-            # Add variation across zones with some zones consistently higher/lower
-            zone_variation = np.random.normal(0, 0.1, n_zones)
-            zone_occupancy[:, t] = (
-                avg_occ + zone_variation + np.random.normal(0, 0.05, n_zones)
-            )
-            zone_occupancy[:, t] = np.clip(zone_occupancy[:, t], 0, 1)
+        n_zones, n_steps = zone_occupancy.shape
 
         # Create heatmap
         fig, ax = plt.subplots(figsize=(16, 10))
-
-        # Convert to hours for x-axis
-        [i * 5 / 60 for i in range(n_steps)]
 
         # Use improved colormap with better dark theme compatibility
         from matplotlib.colors import LinearSegmentedColormap
@@ -461,21 +501,23 @@ class ParkingVisualizer:
             aspect="auto",
             vmin=0,
             vmax=1,
-            interpolation="bilinear",
+            interpolation="nearest",
             origin="lower",
         )
 
         # Improve axis formatting
         # Set x-axis ticks every hour
-        hour_indices = list(range(0, n_steps, 12))  # Every 12 time steps (1 hour)
+        hour_indices = list(range(0, n_steps, max(1, n_steps // 8)))
         ax.set_xticks(hour_indices)
-        ax.set_xticklabels([f"{int(i * 5 / 60)}:00" for i in hour_indices])
+        ax.set_xticklabels(
+            [f"{self._elapsed_minutes()[i] / 60:.2f}h" for i in hour_indices]
+        )
 
         # Set y-axis with better zone labeling
         zone_step = max(1, n_zones // 20)  # Show at most 20 zone labels
         zone_indices = list(range(0, n_zones, zone_step))
         ax.set_yticks(zone_indices)
-        ax.set_yticklabels([f"Zone {i + 1}" for i in zone_indices])
+        ax.set_yticklabels([zone_ids[i] for i in zone_indices])
 
         format_axis_labels(ax, "Parking Zone Occupancy Heatmap", "Time", "Parking Zone")
 
@@ -550,7 +592,7 @@ class ParkingVisualizer:
             )
 
         # Add complexity annotations
-        for i, (_algo, comp) in enumerate(zip(algorithms, complexities)):
+        for i, (_algo, comp) in enumerate(zip(algorithms, complexities, strict=True)):
             ax.text(
                 0.1,
                 i,
@@ -577,7 +619,7 @@ class ParkingVisualizer:
                 1,
                 1,
                 fc=self.theme_colors["bar_colors"][0],
-                label="Routing (A*)",
+                label="Routing (Shortest Paths)",
             ),
             plt.Rectangle(
                 (0, 0),
@@ -610,15 +652,14 @@ class ParkingVisualizer:
         """Create a summary dashboard"""
         metrics = self.results["metrics"]
         config = self.results.get("simulation_config", {})
-        params = self.results.get("parameters", {})
 
         fig = plt.figure(figsize=(18, 12))
         fig.suptitle(
-            "Parking Optimization System - Summary Dashboard",
+            self._context_title("Parking Scenario Summary"),
             fontsize=24,
             color=self.theme_colors["text_color"],
             fontweight="bold",
-            y=0.96,
+            y=0.995,
         )
 
         # Create improved grid layout
@@ -631,7 +672,15 @@ class ParkingVisualizer:
         ax1.axis("off")
 
         total_revenue = sum(metrics["total_revenue"])
-        avg_occupancy = np.mean(metrics["avg_occupancy"]) * 100
+        avg_occupancy = (
+            float(
+                np.average(
+                    metrics["avg_occupancy"],
+                    weights=np.diff([0, *self._elapsed_minutes()]),
+                )
+            )
+            * 100
+        )
         total_drivers = metrics["successful_parks"] + metrics["rejected_drivers"]
         success_rate = (
             (metrics["successful_parks"] / total_drivers * 100)
@@ -642,23 +691,27 @@ class ParkingVisualizer:
             np.mean(metrics["avg_search_time"]) if metrics["avg_search_time"] else 0
         )
 
-        # Improved metrics text formatting
-        metrics_text = "🏗️ System Configuration\n"
-        metrics_text += f"{'═' * 28}\n"
-        metrics_text += (
-            f"Zones: {config.get('total_zones', params.get('n_zones', 'N/A'))}\n"
+        capacity = sum(
+            z.get("capacity", 0)
+            for z in self.results.get("final_state", {}).get("zone_occupancy", [])
         )
-        metrics_text += f"Intersections: {config.get('total_road_nodes', params.get('n_intersections', 'N/A'))}\n"
+        metrics_text = f"Scenario: {config.get('data_source', 'legacy')} | seed {config.get('seed', 'unknown')}\n"
         metrics_text += (
-            f"Drivers: {config.get('n_drivers', params.get('n_drivers', 'N/A'))}\n"
+            f"Zones: {config.get('total_zones', 'N/A')} | spaces: {capacity:,}\n"
         )
-        metrics_text += f"City Size: {params.get('city_size_km', 'Real data')} km\n\n"
-        metrics_text += "📊 Performance Metrics\n"
-        metrics_text += f"{'═' * 28}\n"
-        metrics_text += f"Total Revenue: ${total_revenue:.2f}\n"
+        metrics_text += (
+            f"Drivers: {config.get('n_drivers', 'N/A'):,}\n"
+            if isinstance(config.get("n_drivers"), int)
+            else "Drivers: unknown\n"
+        )
+        metrics_text += f"Duration: {config.get('duration_hours', '?')}h | warm-up: {config.get('warmup_hours', 0)}h\n\n"
+        metrics_text += "Full run (includes warm-up)\n"
+        metrics_text += f"Total Revenue: ${total_revenue:,.2f}\n"
         metrics_text += f"Avg Occupancy: {avg_occupancy:.1f}%\n"
-        metrics_text += f"Success Rate: {success_rate:.1f}%\n"
-        metrics_text += f"Avg Search Time: {avg_search:.1f} min"
+        metrics_text += f"Resolved Success: {success_rate:.1f}%\n"
+        metrics_text += f"Unresolved Drivers: {self._outcome_counts()[2]:,}\n"
+        metrics_text += f"Successful Search: {avg_search:.1f} min\n"
+        metrics_text += f"Search observations: {len(metrics['avg_search_time']):,}"
 
         ax1.text(
             0.05,
@@ -680,7 +733,7 @@ class ParkingVisualizer:
 
         # 2. Occupancy over time (top middle and right)
         ax2 = fig.add_subplot(gs[0, 1:])
-        time_steps = [i * 5 / 60 for i in range(len(metrics["avg_occupancy"]))]  # hours
+        time_steps = [minute / 60 for minute in self._elapsed_minutes()]
         ax2.plot(
             time_steps,
             np.array(metrics["avg_occupancy"]) * 100,
@@ -715,7 +768,7 @@ class ParkingVisualizer:
         # 3. Revenue accumulation (middle left)
         ax3 = fig.add_subplot(gs[1, 0])
         cumulative_revenue = np.cumsum(metrics["total_revenue"])
-        time_steps_min = [i * 5 for i in range(len(cumulative_revenue))]
+        time_steps_min = self._elapsed_minutes()
         ax3.plot(
             time_steps_min,
             cumulative_revenue,
@@ -741,7 +794,7 @@ class ParkingVisualizer:
             search_time_ma = (
                 pd.Series(metrics["avg_search_time"]).rolling(window=6).mean()
             )
-            time_steps_search = [i * 5 for i in range(len(metrics["avg_search_time"]))]
+            time_steps_search = list(range(1, len(metrics["avg_search_time"]) + 1))
             ax4.plot(
                 time_steps_search,
                 metrics["avg_search_time"],
@@ -756,10 +809,13 @@ class ParkingVisualizer:
                 color=self.theme_colors["bar_colors"][0],
                 linewidth=3,
                 alpha=0.9,
-                label="30-min MA",
+                label="6-driver moving average",
             )
             format_axis_labels(
-                ax4, "Average Search Time", "Time (minutes)", "Search Time (min)"
+                ax4,
+                "Driver Search Time",
+                "Successful Parking Number",
+                "Search Time (min)",
             )
             format_legend(ax4, loc="best")
             ax4.grid(True, alpha=0.3)
@@ -768,21 +824,22 @@ class ParkingVisualizer:
 
         # 5. Success/Rejection pie (middle right)
         ax5 = fig.add_subplot(gs[1, 2])
-        sizes = [metrics["successful_parks"], metrics["rejected_drivers"]]
+        sizes = self._outcome_counts()
         if sum(sizes) > 0:
-            labels = ["Successful", "Rejected"]
+            labels = ["Parked", "Rejected", "Unresolved"]
             colors = [
                 self.theme_colors["main_color"],
                 self.theme_colors["bar_colors"][3],
+                self.theme_colors["bar_colors"][1],
             ]
-            wedges, texts, autotexts = ax5.pie(
+            _wedges, _texts, autotexts = ax5.pie(
                 sizes,
                 labels=labels,
                 colors=colors,
                 autopct="%1.1f%%",
                 startangle=90,
                 textprops={"color": self.theme_colors["text_color"], "fontsize": 11},
-                explode=(0.05, 0),
+                explode=tuple([0.05] + [0] * (len(sizes) - 1)),
             )
 
             # Style pie chart text
@@ -791,7 +848,7 @@ class ParkingVisualizer:
                 autotext.set_fontweight("bold")
                 autotext.set_fontsize(11)
 
-            format_axis_labels(ax5, "Parking Outcomes")
+            format_axis_labels(ax5, "All Generated Driver Outcomes")
         else:
             ax5.text(
                 0.5,
@@ -804,16 +861,16 @@ class ParkingVisualizer:
                 style="italic",
                 color=self.theme_colors["text_color"],
             )
-            format_axis_labels(ax5, "Parking Outcomes")
+            format_axis_labels(ax5, "All Generated Driver Outcomes")
 
         # 6. Algorithm complexity (bottom)
         ax6 = fig.add_subplot(gs[2, :])
         ax6.axis("off")
 
-        complexity_text = "🔧 Algorithm Complexity Analysis\n"
+        complexity_text = "Algorithm Complexity Analysis\n"
         complexity_text += "═" * 70 + "\n"
         complexity_text += (
-            "Routing (A*):           O((V + E) log V) - V=nodes, E=edges\n"
+            "Routing (Shortest Paths):           O((V + E) log V) - V=nodes, E=edges\n"
         )
         complexity_text += "Pricing (Game Theory):  O(z²) - z=zones\n"
         complexity_text += (
@@ -852,7 +909,7 @@ class ParkingVisualizer:
 
         # Define known algorithm complexities
         algorithms = [
-            "Route Optimization\n(A* Algorithm)",
+            "Route Optimization\n(Shortest Paths)",
             "Dynamic Pricing\n(Game Theory)",
             "Demand Prediction\n(Dynamic Programming)",
             "City Coordination\n(Divide & Conquer)",
@@ -910,7 +967,7 @@ class ParkingVisualizer:
                 1,
                 1,
                 fc=self.theme_colors["bar_colors"][0],
-                label="Routing (A*)",
+                label="Routing (Shortest Paths)",
             ),
             plt.Rectangle(
                 (0, 0),

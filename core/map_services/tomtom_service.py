@@ -38,11 +38,11 @@ class TomTomService(MapService):
         }
 
         try:
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, timeout=self.request_timeout)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            print(f"Error fetching traffic data from TomTom: {e}")
+            print(f"Error fetching traffic data from TomTom: {type(e).__name__}")
             return {}
 
     def get_route(
@@ -64,9 +64,9 @@ class TomTomService(MapService):
         url = f"{self.base_url}/routing/1/calculateRoute/{start_str}:{end_str}/json"
         params = {"key": self.api_key}
         try:
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, timeout=self.request_timeout)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            print(f"Error fetching route data from TomTom: {e}")
+            print(f"Error fetching route data from TomTom: {type(e).__name__}")
             return {}

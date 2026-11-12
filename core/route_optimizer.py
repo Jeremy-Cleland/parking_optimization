@@ -4,6 +4,7 @@ Implements real-time path finding with NetworkX graph and OSMnx
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 import networkx as nx
@@ -12,7 +13,7 @@ import osmnx as ox
 
 from core.exceptions import DataValidationError, NetworkError, RouteNotFoundError
 from core.logger import get_logger
-from core.map_data_loader import get_map_data_loader
+from core.map_data_loader import MapDataLoader, get_map_data_loader
 
 logger = get_logger(__name__)
 
@@ -26,6 +27,8 @@ class RouteResult:
     total_time: float  # seconds
     parking_zone_id: str
     route_coordinates: List[Tuple[float, float]]  # [(lat, lon), ...]
+    walking_distance: float = 0.0  # meters, straight-line estimate to destination
+    estimated_parking_cost: float = 0.0
 
 
 class RouteOptimizer:
@@ -34,14 +37,19 @@ class RouteOptimizer:
     Finds optimal routes on actual Grand Rapids road network.
     """
 
-    def __init__(self):
-        self.map_loader = get_map_data_loader()
+    def __init__(self, map_loader: Optional[MapDataLoader] = None):
+        self.map_loader = (
+            map_loader if map_loader is not None else get_map_data_loader()
+        )
         self.road_graph: Optional[nx.MultiDiGraph] = None
         self.parking_zones: List[Dict] = []
         self._connected_components = None
+        self._nearest_nodes = {}
+        self._reachable_nodes = {}
+        self._route_paths = {}
 
         # Initialize if data is available
-        if self.map_loader.is_data_available():
+        if self.map_loader.road_network is not None:
             self._initialize_from_map_data()
         else:
             logger.warning(
@@ -52,6 +60,7 @@ class RouteOptimizer:
         """Initialize with real-world map data."""
         self.road_graph = self.map_loader.road_network
         self.parking_zones = self.map_loader.get_parking_zones()
+        self._prepare_edge_weights()
 
         # Analyze network connectivity
         import networkx as nx
@@ -67,6 +76,22 @@ class RouteOptimizer:
         logger.info(
             f"Road network has {len(self._connected_components)} connected components"
         )
+
+    def _prepare_edge_weights(self):
+        """Supply travel times before routing, using the same units as RouteResult."""
+        for _u, _v, attrs in self.road_graph.edges(data=True):
+            if "travel_time" not in attrs:
+                speed = attrs.get("speed_kph", 50)
+                if isinstance(speed, list):
+                    speed = speed[0] if speed else 50
+                try:
+                    speed = float(speed)
+                except (ValueError, TypeError):
+                    speed = 50
+                if not np.isfinite(speed) or speed <= 0:
+                    speed = 50
+                attrs["travel_time"] = attrs.get("length", 0) / (speed / 3.6)
+            attrs["base_travel_time"] = attrs["travel_time"]
 
     def find_optimal_route(
         self,
@@ -146,9 +171,13 @@ class RouteOptimizer:
     def _find_nearest_node(self, location: Tuple[float, float]) -> Optional[int]:
         """Find the nearest road network node to a location."""
         try:
+            location = tuple(location)
+            if location in self._nearest_nodes:
+                return self._nearest_nodes[location]
             lat, lon = location
             # Use OSMnx to find nearest node
             nearest_node = ox.nearest_nodes(self.road_graph, lon, lat)
+            self._nearest_nodes[location] = nearest_node
             return nearest_node
         except Exception as e:
             logger.error(f"Error finding nearest node: {e}")
@@ -175,17 +204,20 @@ class RouteOptimizer:
         self, start_node: int, zones: List[Dict]
     ) -> List[Dict]:
         """Filter parking zones to only include those reachable from start_node."""
-        if not self._connected_components:
-            return zones
+        if self.road_graph is None or start_node not in self.road_graph:
+            return []
 
-        start_component = self._get_component_for_node(start_node)
-        if not start_component:
-            return zones
+        # A destination need not have a return path to be reachable on one-way roads.
+        if start_node not in self._reachable_nodes:
+            self._reachable_nodes[start_node] = nx.descendants(
+                self.road_graph, start_node
+            ) | {start_node}
+        reachable_nodes = self._reachable_nodes[start_node]
 
         reachable_zones = []
         for zone in zones:
             zone_node = self._find_nearest_node(zone["coordinates"])
-            if zone_node and zone_node in start_component:
+            if zone_node is not None and zone_node in reachable_nodes:
                 reachable_zones.append(zone)
 
         logger.debug(
@@ -202,13 +234,45 @@ class RouteOptimizer:
     ) -> Optional[RouteResult]:
         """Calculate route between two nodes."""
         try:
+            preferences = preferences or {}
+            destination = preferences.get("destination")
+            if "walking_distances" in preferences:
+                walking_distance = float(
+                    preferences["walking_distances"][
+                        preferences["zone_indices"][parking_zone["id"]]
+                    ]
+                )
+            else:
+                walking_distance = (
+                    self._distance_meters(parking_zone["coordinates"], destination)
+                    if destination
+                    else 0.0
+                )
+            if (
+                walking_distance
+                > preferences.get("max_walk_distance", float("inf")) * 1000
+            ):
+                return None
+            if preferences.get("requires_accessible") and not parking_zone.get(
+                "accessible", False
+            ):
+                return None
+            rate = preferences.get("zone_prices", {}).get(
+                parking_zone["id"], parking_zone.get("hourly_rate", 0)
+            )
+            cost = rate * preferences.get("parking_duration_minutes", 60) / 60
+            if cost > preferences.get("max_parking_cost", float("inf")):
+                return None
             # Use NetworkX shortest path with different weight options
             weight = self._get_routing_weight(preferences)
 
             # Calculate shortest path
-            path_nodes = nx.shortest_path(
-                self.road_graph, start_node, end_node, weight=weight
-            )
+            cache_key = (start_node, end_node, weight)
+            if cache_key not in self._route_paths:
+                self._route_paths[cache_key] = nx.shortest_path(
+                    self.road_graph, start_node, end_node, weight=weight
+                )
+            path_nodes = list(self._route_paths[cache_key])
 
             # Calculate route metrics
             total_distance = 0
@@ -218,9 +282,11 @@ class RouteOptimizer:
             for i in range(len(path_nodes) - 1):
                 edge_data = self.road_graph[path_nodes[i]][path_nodes[i + 1]]
 
-                # Handle MultiDiGraph - get first edge data
-                if isinstance(edge_data, dict) and len(edge_data) > 0:
-                    edge_attrs = next(iter(edge_data.values()))
+                # Match NetworkX's minimum-weight parallel edge selection.
+                if self.road_graph.is_multigraph():
+                    edge_attrs = min(
+                        edge_data.values(), key=lambda attrs: attrs.get(weight, 1)
+                    )
                 else:
                     edge_attrs = edge_data
 
@@ -228,16 +294,7 @@ class RouteOptimizer:
                 distance = edge_attrs.get("length", 0)  # meters
                 total_distance += distance
 
-                # Estimate travel time (speed in km/h, convert to m/s)
-                speed_kmh = edge_attrs.get("speed_kph", 50)  # Default 50 km/h
-                if isinstance(speed_kmh, list):
-                    speed_kmh = speed_kmh[0] if speed_kmh else 50
-
-                speed_ms = speed_kmh / 3.6
-                travel_time = (
-                    distance / speed_ms if speed_ms > 0 else distance / 13.89
-                )  # fallback ~50kmh
-                total_time += travel_time
+                total_time += edge_attrs["travel_time"]
 
             # Get coordinates for each node in path
             for node_id in path_nodes:
@@ -250,6 +307,8 @@ class RouteOptimizer:
                 total_time=total_time,
                 parking_zone_id=parking_zone["id"],
                 route_coordinates=route_coordinates,
+                walking_distance=walking_distance,
+                estimated_parking_cost=cost,
             )
 
         except nx.NetworkXNoPath:
@@ -282,6 +341,15 @@ class RouteOptimizer:
             # Default scoring: distance + time
             return route.total_distance + (route.total_time * 10)
 
+        if "destination" in preferences:
+            # Generalized trip cost in dollars, including the stay and both legs.
+            value_of_time = preferences.get("time_value", 15)
+            return (
+                route.estimated_parking_cost * preferences.get("price_weight", 1)
+                + (route.total_time / 3600 + route.walking_distance / 5000)
+                * value_of_time
+            )
+
         score = 0
 
         # Distance component
@@ -309,6 +377,7 @@ class RouteOptimizer:
         self,
         start_location: Tuple[float, float],
         preferences: Optional[Dict] = None,
+        available_parking_zones: Optional[List[str]] = None,
     ) -> Dict[str, RouteResult]:
         """
         Find optimal parking options with multiple choices.
@@ -329,7 +398,7 @@ class RouteOptimizer:
                 return {}
 
             # Get all candidate zones and filter by connectivity
-            candidate_zones = self._filter_parking_zones(None)  # Get all zones
+            candidate_zones = self._filter_parking_zones(available_parking_zones)
             candidate_zones = self._filter_zones_by_connectivity(
                 start_node, candidate_zones
             )
@@ -417,7 +486,19 @@ class RouteOptimizer:
 
         return available_zones
 
-    def update_traffic_conditions(self, traffic_data: Dict[str, float]):
+    @staticmethod
+    def _distance_meters(start, end):
+        lat1, lon1 = np.radians(start)
+        lat2, lon2 = np.radians(end)
+        a = (
+            np.sin((lat2 - lat1) / 2) ** 2
+            + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2
+        )
+        return float(6371000 * 2 * np.arcsin(np.sqrt(np.clip(a, 0, 1))))
+
+    def update_traffic_conditions(
+        self, traffic_data: Dict, current_time=None, max_age_seconds=300
+    ):
         """
         Update edge weights based on current traffic conditions.
 
@@ -428,10 +509,46 @@ class RouteOptimizer:
             return
 
         # Update edge weights based on traffic data
-        for _edge_id, _traffic_factor in traffic_data.items():
-            # This would need to be implemented based on how traffic data maps to edges
-            # For now, it's a placeholder for the interface
-            pass
+        now = current_time or datetime.now()
+        self._route_paths = {
+            key: value
+            for key, value in self._route_paths.items()
+            if key[2] != "travel_time"
+        }
+        for (u, v, key), condition in traffic_data.items():
+            if not self.road_graph.has_edge(u, v, key):
+                continue
+            observed_now = datetime.now() if condition.is_real_data else now
+            age = (observed_now - condition.last_updated).total_seconds()
+            factor = condition.travel_time_factor
+            if (
+                not 0 <= age <= max_age_seconds
+                or not np.isfinite(factor)
+                or factor <= 0
+            ):
+                continue
+            attrs = self.road_graph[u][v][key]
+            attrs["travel_time"] = attrs["base_travel_time"] * factor
+            attrs["traffic_observed_at"] = condition.last_updated
+            attrs["traffic_is_real"] = condition.is_real_data
+            attrs["traffic_source"] = condition.source
+
+    def expire_traffic(self, current_time, max_age_seconds=300):
+        self._route_paths = {
+            key: value
+            for key, value in self._route_paths.items()
+            if key[2] != "travel_time"
+        }
+        for _u, _v, attrs in self.road_graph.edges(data=True):
+            observed = attrs.get("traffic_observed_at")
+            now = datetime.now() if attrs.get("traffic_is_real") else current_time
+            if (
+                observed is not None
+                and not 0 <= (now - observed).total_seconds() <= max_age_seconds
+            ):
+                attrs["travel_time"] = attrs["base_travel_time"]
+                attrs.pop("traffic_observed_at", None)
+                attrs["traffic_source"] = "free_flow"
 
     def get_route_summary(self, route: RouteResult) -> Dict:
         """Get a summary of route information."""

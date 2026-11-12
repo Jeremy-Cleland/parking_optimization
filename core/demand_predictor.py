@@ -5,7 +5,7 @@ Predicts parking demand patterns for optimal resource allocation
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -31,6 +31,7 @@ class DemandPredictor:
         time_slots_per_day: int = 24,
         occupancy_levels: int = 11,
         history_weeks: int = 4,
+        capacity: int = 1,
     ):
         """
         Initialize demand predictor
@@ -40,6 +41,11 @@ class DemandPredictor:
             occupancy_levels: Number of discretized occupancy levels
             history_weeks: Weeks of historical data to consider
         """
+        if time_slots_per_day != 24 or occupancy_levels < 2 or capacity < 1:
+            raise ValueError(
+                "Use 24 hourly slots, at least two states and positive capacity"
+            )
+        self.capacity = capacity
         self.time_slots_per_day = time_slots_per_day
         self.time_slots_per_week = time_slots_per_day * 7
         self.occupancy_levels = occupancy_levels
@@ -60,6 +66,8 @@ class DemandPredictor:
         # Historical patterns
         self.weekly_patterns = []
         self.special_events = {}
+        self.event_windows = []
+        self.demand_scale = 1.0
 
     def train_model(self, historical_data: List[Dict]):
         """
@@ -80,7 +88,16 @@ class DemandPredictor:
             time_slot = self._get_time_slot(record["timestamp"])
             occupancy = self._discretize_occupancy(record["occupancy_rate"])
             weather = record.get("weather", 0)
-            demand = record["arrivals"]  # Number of cars arriving
+            capacity = record.get("capacity", self.capacity)
+            if (
+                capacity <= 0
+                or not np.isfinite(record["arrivals"])
+                or record["arrivals"] < 0
+            ):
+                raise ValueError(
+                    "Training arrivals must be nonnegative and capacity positive"
+                )
+            demand = record["arrivals"] / capacity  # Hourly arrivals per space
 
             slot_data[time_slot].append(
                 {"occupancy": occupancy, "weather": weather, "demand": demand}
@@ -90,7 +107,9 @@ class DemandPredictor:
         self._build_dp_table(slot_data)
 
         # Learn transition probabilities
-        self._learn_transitions(historical_data)
+        self._learn_transitions(
+            sorted(historical_data, key=lambda row: row["timestamp"])
+        )
 
     def _build_dp_table(self, slot_data: List[List[Dict]]):
         """
@@ -123,6 +142,7 @@ class DemandPredictor:
         current_occupancy: float,
         weather: int = 0,
         lookahead_hours: int = 4,
+        capacity: Optional[int] = None,
     ) -> List[float]:
         """
         Predict parking demand for the next few hours
@@ -138,6 +158,15 @@ class DemandPredictor:
         Returns:
             List of predicted demands for each hour
         """
+        capacity = self.capacity if capacity is None else capacity
+        if capacity <= 0 or not np.isfinite(capacity):
+            raise ValueError("Forecast capacity must be finite and positive")
+        if (
+            not 0 <= current_occupancy <= 1
+            or weather not in (0, 1, 2)
+            or lookahead_hours < 1
+        ):
+            raise ValueError("Invalid occupancy, weather, or forecast horizon")
         predictions = []
         time_slot = self._get_time_slot(current_time)
         occ_level = self._discretize_occupancy(current_occupancy)
@@ -153,24 +182,22 @@ class DemandPredictor:
             event_factor = self._get_event_factor(current_time + timedelta(hours=hour))
 
             # Apply day-of-week patterns
-            dow_factor = self._get_dow_factor(slot)
+            # Weekly slots already encode day-of-week; do not apply it twice.
+            dow_factor = 1.0
 
             # Final prediction
-            predicted_demand = base_demand * event_factor * dow_factor
+            predicted_demand = float(
+                base_demand * event_factor * dow_factor * capacity * self.demand_scale
+            )
             predictions.append(predicted_demand)
 
             # Update occupancy estimate for next prediction
             # Use more realistic capacity-aware transition model
             arrivals = predicted_demand
-            departures = self._estimate_departures(occ_level, slot)
+            departures = self._estimate_departures(occ_level, slot, capacity)
 
             # Get the actual capacity instead of assuming 100
-            capacity = 100  # This should be passed as parameter in real implementation
             net_change = (arrivals - departures) / capacity
-
-            # Add some stochastic variation to make it more realistic
-            noise = np.random.normal(0, 0.05)  # 5% noise
-            net_change += noise
 
             # Update occupancy level with bounds checking
             current_occupancy = occ_level / (self.occupancy_levels - 1)
@@ -255,10 +282,13 @@ class DemandPredictor:
         else:
             # Fallback to time-based average
             all_demands = [d["demand"] for d in slot_data[time_slot]]
-            return np.mean(all_demands) if all_demands else 10.0  # default
+            return float(np.mean(all_demands)) if all_demands else 0.1
 
     def _get_event_factor(self, timestamp: datetime) -> float:
         """Get demand multiplier for special events"""
+        for start, end, multiplier in self.event_windows:
+            if start <= timestamp < end:
+                return multiplier
         date_key = timestamp.date()
         return self.special_events.get(date_key, 1.0)
 
@@ -268,7 +298,9 @@ class DemandPredictor:
         dow_factors = [0.9, 1.0, 1.0, 1.0, 1.1, 1.3, 1.2]  # Mon-Sun
         return dow_factors[dow]
 
-    def _estimate_departures(self, occupancy_level: int, time_slot: int) -> float:
+    def _estimate_departures(
+        self, occupancy_level: int, time_slot: int, capacity: int
+    ) -> float:
         """Estimate departures based on occupancy and time"""
         # Simple model: more departures when fuller and during transition times
         hour = time_slot % 24
@@ -280,7 +312,27 @@ class DemandPredictor:
             base_rate = 0.1
 
         # Scale by occupancy
-        return base_rate * occupancy_level * 10  # Assume ~10 departures per level
+        return base_rate * occupancy_level / (self.occupancy_levels - 1) * capacity
+
+    def evaluate(self, observations: List[Dict]) -> Dict:
+        """Score unseen hourly arrivals; the caller supplies a chronological holdout."""
+        errors = []
+        actuals = []
+        for row in observations:
+            forecast = self.predict_demand(
+                row["timestamp"],
+                row["occupancy_rate"],
+                weather=row.get("weather", 0),
+                lookahead_hours=1,
+                capacity=row.get("capacity", self.capacity),
+            )[0]
+            errors.append(abs(forecast - row["arrivals"]))
+            actuals.append(row["arrivals"])
+        return {
+            "n": len(errors),
+            "mae_arrivals": float(np.mean(errors)) if errors else None,
+            "wape": float(sum(errors) / sum(actuals)) if sum(actuals) else None,
+        }
 
     def analyze_prediction_complexity(self) -> Dict[str, str]:
         """
@@ -290,6 +342,6 @@ class DemandPredictor:
             "train_model": "O(t * s² * w) where t=time slots, s=states, w=weather",
             "predict_demand": "O(h * s) where h=lookahead hours",
             "space_complexity": "O(t * s * w) for DP table",
-            "convergence": "Guaranteed optimal within state space",
+            "convergence": "Not established; empirical forecast evaluation required",
             "accuracy_notes": "Depends on discretization granularity and historical data quality",
         }
