@@ -3,25 +3,25 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python>=3.14.7
-  - numpy>=2.5.3
+  - python>=3.15.2
+  - numpy>=2.5.5
   - matplotlib>=3.11.2
   - seaborn>=0.13.2
-  - pandas>=3.0.5
+  - pandas>=3.1.1
   - scipy>=1.18.1
-  - folium>=0.20.0
+  - folium>=1.0.0
   - scikit-learn>=1.9.1
   - requests>=2.34.2
-  - pytest>=9.1.1  # Testing framework (conda)
+  - pytest>=9.2.0  # Testing framework (conda)
   - pytest-cov>=7.1.0  # Coverage reporting (conda)
-  - mypy>=2.3.1  # Type checking (conda)
-  - ruff>=0.16.7  # Fast Python linter and formatter (conda)
+  - mypy>=2.4.1  # Type checking (conda)
+  - ruff>=0.17.6  # Fast Python linter and formatter (conda)
   - osmnx
   - geopandas
   - rtree
   - pip
   - pip:
-    - pytest-benchmark>=5.3.0  # Performance benchmarking (pip only)
-    - python-dotenv>=1.2.3  # Environment variables (pip only)
+    - pytest-benchmark>=5.3.1  # Performance benchmarking (pip only)
+    - python-dotenv>=1.2.4  # Environment variables (pip only)
     - memory-profiler>=0.61.0  # Memory profiling (pip only)
-    - pre-commit>=4.6.2  # Git hooks (pip only)
+    - pre-commit>=4.7.0  # Git hooks (pip only)
